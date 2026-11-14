@@ -1,0 +1,27 @@
+﻿[Unit]
+Description=hoodi API
+After=network.target
+Wants=hoodi-mailpit.service
+
+[Service]
+Type=simple
+User=hoodi
+Group=hoodi
+WorkingDirectory=/opt/hoodi
+ExecStart=/usr/bin/dotnet /opt/hoodi/Hoodi.Api.dll
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
+EnvironmentFile=/etc/hoodi/hoodi.env
+StateDirectory=hoodi
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hoodi
+
+[Install]
+WantedBy=multi-user.target

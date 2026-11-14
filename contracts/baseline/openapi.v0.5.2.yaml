@@ -1,0 +1,2878 @@
+openapi: 3.1.0
+info:
+  title: RotaAlerta — Contratos de Integração
+  version: 0.5.2
+  description: RotaAlerta GS2026 — baseline v0.5.1 + patch v0.5.2 do resgate de convites; Etapa 2 v1.5 e Especificação v1.3. Contratos e
+    exemplos sintéticos, sem garantia de execução real.
+servers:
+- url: http://localhost:5000
+  description: Desenvolvimento local (não transmitir dados reais)
+- url: https://api.exemplo.invalid
+  description: Placeholder; substituir por HTTPS real na VM
+tags:
+- name: Autenticacao
+- name: Contatos
+- name: Push
+- name: Risco
+- name: Panico
+- name: Trajetos
+- name: Dispositivos
+- name: Administracao
+- name: Saude
+- name: Rotas
+security:
+- bearerAuth: []
+paths:
+  /v1/auth/registrar:
+    post:
+      tags:
+      - Autenticacao
+      summary: Solicitar cadastro com confirmação da posse do e-mail
+      operationId: post_v1_auth_registrar
+      responses:
+        '202':
+          description: Solicitação aceita genericamente; acesso só após confirmar e-mail, sem informar existência.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CadastroAceito'
+              example:
+                mensagem: Se os dados forem elegiveis, a solicitacao de cadastro sera processada.
+        '400':
+          description: Dados invalidos
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Excesso de tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CadastroEntrada'
+            example:
+              email: titular.exemplo@example.invalid
+      security: []
+      description: Solicitar token de cadastro só com e-mail, sem senha/nome. 202 genérico para e-mail novo/existente;
+        não cria conta autenticável nem altera senha já cadastrada. Pedido novo fica pendente até confirmação
+        fora de banda. Token é enviado ao e-mail apenas se elegível; não expor em resposta ou logs. Em dev
+        Mailpit com acesso restrito. Limitar tentativas e atrasos observáveis; casos repetidos pendentes não
+        geram contas duplicadas. Se houver cadastro pendente e um pedido novo elegível chegar depois do cooldown,
+        reemitir token de cadastro de 30 min, invalidando atomicamente o token anterior. Requisição para conta
+        confirmada NÃO emite token de cadastro e nunca altera senha. A resposta pública segue 202 indistinguível
+        para ambos os casos; rate limit restringe abuso de e-mail.
+  /v1/auth/login:
+    post:
+      tags:
+      - Autenticacao
+      summary: Autenticar
+      operationId: post_v1_auth_login
+      responses:
+        '200':
+          description: JWT emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokensAuth'
+              example: &id001
+                accessToken: JWT_SINTETICO_NAO_VALIDO
+                tokenType: Bearer
+                expiraEm: '2026-11-08T15:00:00-03:00'
+                usuario:
+                  id: e508490e-c7fb-4cb3-8142-248860a88711
+                  nome: Pessoa Exemplo
+                  email: titular.exemplo@example.invalid
+                refreshToken: REFRESH_FICTICIO_NAO_VALIDO_E_USO_UNICO
+                expiraRefreshEm: '2026-11-15T14:00:00-03:00'
+        '401':
+          description: Credenciais inválidas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Muitas tentativas de login
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginEntrada'
+            example:
+              email: titular.exemplo@example.invalid
+              senha: EXEMPLO_NAO_USAR_123!
+      security: []
+      description: 'Somente contas verificadas podem entrar. Conta pendente, inexistente ou senha inválida:
+        401 genérico sem diferenciar causa.'
+  /v1/contatos/convites:
+    post:
+      tags:
+      - Contatos
+      summary: Emitir convite unidirecional A→B
+      operationId: post_v1_contatos_convites
+      responses:
+        '201':
+          description: Código de uso único
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NovoConvite'
+              example:
+                codigo: CODIGO_SINTETICO_8X91
+                expiraEm: '2026-11-08T15:00:00-03:00'
+                direcao: titular_para_contato
+                conviteId: 112f8c2c-e4df-4bb4-bd77-38cf7041f60c
+        '429':
+          description: Limite de convites
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      description: Código é criado sem identificar B; duplicidade por par ordenado é checada no resgate.
+    get:
+      tags:
+      - Contatos
+      operationId: get_v1_contatos_convites
+      summary: Listar convites pendentes emitidos pelo usuário
+      description: O emissor pode recuperar conviteId após reinstalação para cancelá-lo. Código secreto não
+        é retornado novamente.
+      responses:
+        '200':
+          description: Convites pendentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConvitePendenteResumo'
+              example:
+              - conviteId: 112f8c2c-e4df-4bb4-bd77-38cf7041f60c
+                expiraEm: '2026-11-08T22:00:00-03:00'
+                estado: pendente
+                direcao: titular_para_contato
+        '401':
+          description: Não autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/contatos/convites/resgatar:
+    post:
+      tags:
+      - Contatos
+      summary: Aceitar ou rejeitar convite
+      description: >-
+        Validar nesta ordem: (1) codigo existente, pendente e nao expirado; caso contrario 409,
+        para ambas as decisoes; (2) emissor tentando resgatar o proprio convite recebe
+        422 VINCULO_PROPRIO em ambas as decisoes; para desistir, deve usar DELETE;
+        (3) rejeitar encerra o convite como rejeitado e retorna 204 sem verificar duplicidade
+        nem criar vinculo; (4) aceitar verifica duplicidade do par, retorna 409 se ja houver
+        vinculo ativo ou 200 com Vinculo apos criar o relacionamento. Convite rejeitado
+        desaparece do GET de convites pendentes do emissor; nao ha garantia de ocultar
+        que o convite foi encerrado.
+      operationId: post_v1_contatos_convites_resgatar
+      responses:
+        '200':
+          description: Convite aceito; vínculo criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vinculo'
+              example:
+                id: aa0c6cb6-05e5-4cf2-9211-cb53cb03b87c
+                titularId: e508490e-c7fb-4cb3-8142-248860a88711
+                contatoId: 5277d7b7-cef5-4fdd-a06b-20c7e63b4a7f
+                estado: aceito
+                direcao: titular_para_contato
+                nomeExibicao: Pessoa Exemplo
+                papelDoSolicitante: contato
+        '204':
+          description: Convite rejeitado; nenhum vínculo criado
+        '422':
+          description: Emissor não pode aceitar nem rejeitar o próprio convite
+          content:
+            application/problem+json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/Erro'
+                - type: object
+                  properties:
+                    status:
+                      const: 422
+                    code:
+                      const: VINCULO_PROPRIO
+                  required:
+                  - status
+                  - code
+        '409':
+          description: Código inexistente, expirado ou encerrado; ou vínculo ativo duplicado apenas no aceite
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Excesso de tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResgateConviteEntrada'
+  /v1/contatos:
+    get:
+      tags:
+      - Contatos
+      summary: Listar vínculos dos quais sou titular ou contato
+      operationId: get_v1_contatos
+      responses:
+        '200':
+          description: Vínculos visíveis ao usuário
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vinculo'
+      description: Lista apenas vinculos visiveis ao usuario autenticado, com nomeExibicao do outro participante.
+        Convites pendentes nao sao vinculos aceitos.
+  /v1/contatos/{vinculoId}:
+    delete:
+      tags:
+      - Contatos
+      summary: Revogar vínculo aceito de qualquer um dos lados
+      operationId: delete_v1_contatos_vinculoId
+      responses:
+        '204':
+          description: Vínculo revogado
+        '404':
+          description: Não encontrado ou sem autorização
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: vinculoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/push/tokens:
+    put:
+      tags:
+      - Push
+      summary: Registrar/renovar token Expo da instalação
+      operationId: put_v1_push_tokens
+      responses:
+        '200':
+          description: Token registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPushResumo'
+              example:
+                id: 79292377-053c-40e7-a48b-7e6d3e29a2f6
+                ativo: true
+        '422':
+          description: Token inválido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenPushEntrada'
+  /v1/push/tokens/{tokenId}:
+    delete:
+      tags:
+      - Push
+      summary: Desativar token
+      operationId: delete_v1_push_tokens_tokenId
+      responses:
+        '204':
+          description: Desativado
+        '404':
+          description: Não encontrado ou sem autorização
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: tokenId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/risco/versao-atual:
+    get:
+      tags:
+      - Risco
+      summary: Identificar versão vigente
+      operationId: get_v1_risco_versao_atual
+      responses:
+        '200':
+          description: Versão publicada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersaoGrade'
+        '404':
+          description: Nenhuma grade publicada
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      security: []
+      description: Endpoint público apenas com metadados; nenhuma localização do usuário é recebida.
+  /v1/risco/grade:
+    get:
+      tags:
+      - Risco
+      summary: Baixar grade de 1 ou 2 dias no fuso São Paulo
+      operationId: get_v1_risco_grade
+      responses:
+        '200':
+          description: Pacote coerente da grade Consulta paginada com no máximo 1000 células; proximoCursor
+            = null na última página. Todas páginas são da MESMA versão.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+              example:
+                versao: mock-2026-11-08-v1
+                fuso: America/Sao_Paulo
+                dataInicio: '2026-11-08'
+                dataFim: '2026-11-09'
+                geradaEm: '2026-11-08T12:00:00-03:00'
+                periodoDados: 2026-01-01/2026-10-31
+                referencia:
+                  area: regiao_sintetica_de_teste
+                  tipo: frequencia_relativa_ocorrencias
+                  denominador: media_sintetica_de_ocorrencias_por_celula_na_mesma_faixa_e_tipo_dia
+                  metodo: contagens_sinteticas_divididas_por_media_sintetica_do_grupo
+                  naoEhProbabilidadeIndividual: true
+                  limiaresNivel:
+                    nivel1Minimo: 0.8
+                    nivel2Minimo: 1.25
+                    nivel3Minimo: 1.55
+                celulas:
+                - geohash: 6gyf4bf
+                  faixaHoraria: 21
+                  tipoDia: util
+                  nivel: 0
+                  riscoRelativo: 0.65
+                  nOcorrencias: 7
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bg
+                  faixaHoraria: 21
+                  tipoDia: fim_semana
+                  nivel: 1
+                  riscoRelativo: 0.8
+                  nOcorrencias: 8
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bh
+                  faixaHoraria: 21
+                  tipoDia: util
+                  nivel: 1
+                  riscoRelativo: 0.95
+                  nOcorrencias: 9
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bj
+                  faixaHoraria: 21
+                  tipoDia: util
+                  nivel: null
+                  riscoRelativo: null
+                  nOcorrencias: 1
+                  suficiente: false
+                  motivoDesconhecido: amostra_insuficiente
+                - geohash: 6gyf4bk
+                  faixaHoraria: 21
+                  tipoDia: fim_semana
+                  nivel: 2
+                  riscoRelativo: 1.25
+                  nOcorrencias: 11
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bm
+                  faixaHoraria: 22
+                  tipoDia: util
+                  nivel: 2
+                  riscoRelativo: 1.4
+                  nOcorrencias: 12
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bn
+                  faixaHoraria: 22
+                  tipoDia: util
+                  nivel: 3
+                  riscoRelativo: 1.55
+                  nOcorrencias: 13
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bp
+                  faixaHoraria: 22
+                  tipoDia: fim_semana
+                  nivel: 3
+                  riscoRelativo: 1.7
+                  nOcorrencias: 14
+                  suficiente: true
+                  motivoDesconhecido: null
+                - geohash: 6gyf4bq
+                  faixaHoraria: 22
+                  tipoDia: fim_semana
+                  nivel: null
+                  riscoRelativo: null
+                  nOcorrencias: 1
+                  suficiente: false
+                  motivoDesconhecido: amostra_insuficiente
+                - geohash: 6gyf4br
+                  faixaHoraria: 22
+                  tipoDia: util
+                  nivel: 3
+                  riscoRelativo: 2.0
+                  nOcorrencias: 16
+                  suficiente: true
+                  motivoDesconhecido: null
+                precisaoGeohash: 7
+                limitePagina: 500
+                proximoCursor: null
+          headers:
+            Cache-Control:
+              description: Até data planejada da próxima atualização da grade (nunca assume cache eterno)
+              schema:
+                type: string
+        '400':
+          description: Parâmetro inválido de região, formato, limite ou filtros conflitantes; CURSOR_INVALIDO
+            se cursor expirou/foi usado com filtros divergentes; LIMITE_INVALIDO fora de 1..1000. Expiração
+            / assinatura inválida do cursor não provoca troca de versão; cliente reinicia paginação.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroBbox'
+              example:
+                title: Região inválida
+                status: 400
+                code: BBOX_INVALIDA
+                traceId: trace-sintetico-400
+                detail: Lados da bbox não podem ultrapassar 0.02 grau.
+        '404':
+          description: Grade indisponível
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: prefixo
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 5
+          maxLength: 6
+          pattern: ^[0123456789bcdefghjkmnpqrstuvwxyz]{5,6}$
+        description: Prefixo geohash da região
+      - name: bbox
+        in: query
+        required: false
+        description: 'latMin,lonMin,latMax,lonMax; latMin<latMax, lonMin<lonMax e cada lado <= 0.02 grau, valores
+          nas faixas geográficas válidas. Fora disso: 400 BBOX_INVALIDA.'
+        schema:
+          type: string
+          pattern: ^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$
+        example: -23.565,-46.655,-23.545,-46.630
+      - name: dataInicio
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: dias
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 2
+        description: 1 a 2 dias civis, incluindo virada
+      - name: versao
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+        description: Versão imutável desejada, para alinhar mapa com ranking. Se indisponível, retorna 404
+          sem trocar silenciosamente a versão. Versões usadas por cursores são retidas >=60 min desde a última
+          emissão.
+      - name: limite
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 500
+        description: Quantidade máxima de células retornadas (default 500, máximo 1000).
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 1024
+        description: Cursor opaco, assinado, com validade de 30 min, preso à versão/filtro/datas/limite. Não
+          alterar filtros ao paginar. Preserva versão antiga por no mínimo 60 min após última emissão; novas
+          publicações não mudam o snapshot.
+      security: []
+      description: 'Exatamente um de prefixo ou bbox; prefixo de 5 a 6 caracteres geohash. Bbox latMin,lonMin,latMax,lonMax
+        exige -90<=latitude<=90, -180<=longitude<=180, min<max e diferença <=0.02 grau em CADA eixo. Falhas
+        retornam 400 com code BBOX_INVALIDA ou FILTRO_REGIAO_INVALIDO. Paginação SEMPRE disponível, limite
+        padrão 500 e máximo 1000 células por página; cursor opaco com TTL 30 min e parâmetros imutáveis, ordenação
+        estável geohash/faixa/tipoDia. 400 CURSOR_INVALIDO para cursor expirado ou parâmetros divergentes.
+        Sem paginação completa, app não pode marcar região como coberta. App deve solicitar bbox com buffer
+        para as bordas e manter pacote de uma única versão. Opcional versao consulta snapshot imutável. Usar
+        período dataInicio e dias (1-2), mantendo hora/dia corretos inclusive offline; posição não vai para
+        logs. Versão publicada não é apagada enquanto houver cursor válido: o servidor retém toda versão usada
+        por cursor por pelo menos 60 min após a ÚLTIMA emissão de cursor dessa versão; o cursor expira em 30
+        min. Se uma nova versão for publicada durante paginação, as próximas páginas seguem a versão PINADA
+        no cursor original até expirar; NUNCA troca silenciosamente de snapshot. Cursor inválido/expirado retorna
+        400 CURSOR_INVALIDO, exigindo reinício com versão vigente. Versão explicitamente solicitada fora da
+        retenção retorna 404 VERSAO_INDISPONIVEL. Reinicialização não pode invalidar todos os cursores ainda
+        válidos: cursor deve ser assinado com chave persistida na VM.'
+  /v1/admin/risco/importar:
+    post:
+      tags:
+      - Administracao
+      summary: Validar CSV e publicar grade atomicamente
+      operationId: post_v1_admin_risco_importar
+      responses:
+        '201':
+          description: Versão publicada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoImportacao'
+        '400':
+          description: CSV ou manifesto inválido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '403':
+          description: Somente administrador
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Versão já publicada
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                arquivoCsv:
+                  type: string
+                  format: binary
+                manifesto:
+                  type: string
+                  description: Manifesto JSON serializado em texto
+              additionalProperties: false
+              required:
+              - arquivoCsv
+              - manifesto
+      description: Metadados do manifesto validam a semântica. Publicação é um commit atômico; lote inválido
+        não substitui o vigente. O periodo_dados de CADA linha precisa igualar manifesto.periodo_dados; precisao_geohash
+        da linha precisa igualar manifesto.precisao_geohash; limiares aplicados a nivel e risco relativo devem
+        ser coerentes; rejeitar o lote inteiro ao detectar discrepancia.
+  /v1/panico:
+    post:
+      tags:
+      - Panico
+      summary: Registrar intenção de ajuda idempotente
+      operationId: post_v1_panico
+      responses:
+        '202':
+          description: Pedido persistido para processamento assíncrono
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoRegistrado'
+              example:
+                pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                registradoEm: '2026-11-08T14:00:00-03:00'
+                origem: app
+                resumo:
+                  estado: em_processamento
+                  total: 1
+                  pendentes: 1
+                  aceitosExpo: 0
+                  aceitosProvedor: 0
+                  abertosNoApp: 0
+                  falhosOuCancelados: 0
+                reutilizado: false
+        '200':
+          description: Replay idempotente (mesmo pedido original)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoRegistrado'
+        '401':
+          description: Autenticação inválida
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Chave reapresentada por classe de credencial diferente
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroConflitoIdempotencia'
+              example:
+                type: about:blank
+                title: Conflito de idempotência
+                status: 409
+                detail: A chave já foi usada por esta conta com outra classe de credencial.
+                code: IDEMPOTENCIA_CREDENCIAL_DIVERGENTE
+                traceId: trace-sintetico-001
+        '422':
+          description: Origem incompatível com credencial ou par de coordenadas inválido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroPanicoValidacao'
+              example:
+                title: Origem incompatível
+                status: 422
+                code: ORIGEM_CREDENCIAL_INCOMPATIVEL
+                traceId: trace-sintetico-422
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanicoEntrada'
+            example:
+              idempotencyKey: 3155ad90-86bb-41bc-b634-148091551a4a
+              origem: app
+              latitude: null
+              longitude: null
+              observacao: Pedido de teste, sem emergência real.
+      security:
+      - bearerAuth: []
+      - deviceKey: []
+      description: A chave identifica um pedido por titular. Reenvio da mesma chave com a MESMA CLASSE de credencial
+        autenticada (JWT_usuario ou X-Device-Key_dispositivo) retorna o pedido original independentemente de
+        origem app/watch (ambos usam JWT). Classe de credencial diferente com mesma chave retorna 409, sem
+        duplicar. Latitude, longitude, observacao, horario e origem ficam congelados no primeiro registro.
+        JWT expirado exige renovar pelo refresh token; dispositivo nao usa JWT. Push nao significa recebimento.
+        JWT usuário admite origem app ou watch; X-Device-Key admite somente esp32. Classe/origem incompatível
+        → 422 ORIGEM_CREDENCIAL_INCOMPATIVEL. O cliente gera UUID de idempotência no PRIMEIRO acionamento (incluindo
+        handler da notificação no Watch encaminhada ao iPhone), persiste atomicamente e reutiliza por 120 s
+        para a mesma intenção entre Watch/app; depois gera nova chave. Servidor retém vínculo (titular,chave,classe,identificador
+        do pedido) por pelo menos 30 dias; coordenadas/observações seguem políticas de retenção separadas.
+        A API deduplica pela chave, independentemente da hora do replay enquanto a associação existir. Nunca
+        reutilizar chave no cliente após janela.  Replay em 200 inclui reutilizado=true, mesmo pedidoId e registradoEm
+        originais, sem atualizar posição, mas resumo derivado pode refletir somente evolução dos despachos
+        já persistidos. A interface diz "Pedido já registrado às HH:MM; localização original mantida", não
+        afirma que novo toque atualizou GPS. Primeiro 202 inclui reutilizado=false. Replay com chave já existente
+        nunca adiciona destinatários/trabalhos novos, nem muda coordenadas, origem ou instante. Somente fases
+        dos despachos PREEXISTENTES podem evoluir no resumo. Interface mostra “Pedido já registrado às HH:MM”,
+        sem dizer “localização atualizada”.
+      x-contratoPush:
+        $ref: '#/components/schemas/PushPedidoAjuda'
+  /v1/panico/{pedidoId}/status:
+    get:
+      tags:
+      - Panico
+      summary: Resumo derivado dos despachos para titular
+      operationId: get_v1_panico_pedidoId_status
+      responses:
+        '200':
+          description: Resumo sem alegação de entrega
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoStatus'
+              example:
+                pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                registradoEm: '2026-11-08T14:00:00-03:00'
+                resumo:
+                  estado: nenhum_envio_confirmado
+                  total: 1
+                  pendentes: 0
+                  aceitosExpo: 0
+                  aceitosProvedor: 0
+                  abertosNoApp: 0
+                  falhosOuCancelados: 1
+        '404':
+          description: Pedido inexistente ou de outra conta
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: pedidoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/panico/recebidos:
+    get:
+      tags:
+      - Panico
+      summary: Listar pedidos recebidos por contato autorizado
+      operationId: get_v1_panico_recebidos
+      responses:
+        '200':
+          description: Lista sem coordenadas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PanicoRecebidoResumo'
+              example:
+              - pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                titularNome: Pessoa Exemplo
+                registradoEm: '2026-11-08T14:00:00-03:00'
+        '401':
+          description: Não autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/panico/{pedidoId}:
+    get:
+      tags:
+      - Panico
+      summary: Consultar detalhe como titular ou contato aceito
+      operationId: get_v1_panico_pedidoId
+      responses:
+        '200':
+          description: Detalhe autorizado (posição pode ser nula)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoDetalhe'
+              example:
+                pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                titularNome: Pessoa Exemplo
+                registradoEm: '2026-11-08T14:00:00-03:00'
+                origem: app
+                latitude: null
+                longitude: null
+                observacao: Pedido de teste, sem emergência real.
+                localizacaoDisponivel: false
+        '404':
+          description: Pedido inexistente, revogado ou sem autorização
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: pedidoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      description: Nenhum dado de posição via push. A API revalida aceite vigente e janela de retenção em toda
+        leitura. Acesso de titular à própria posição também é permitido.
+  /v1/panico/{pedidoId}/abertura:
+    post:
+      tags:
+      - Panico
+      summary: Confirmar abertura do pedido pelo contato no app
+      operationId: post_v1_panico_pedidoId_abertura
+      responses:
+        '204':
+          description: Abertura gravada (não prova entrega via push)
+        '404':
+          description: Pedido não autorizado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: pedidoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/trajetos:
+    post:
+      tags:
+      - Trajetos
+      summary: Iniciar sessão sem trilha de localização
+      operationId: post_v1_trajetos
+      responses:
+        '201':
+          description: Sessão iniciada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sessao'
+      description: Expiração por tempo máximo (configurável, sugestão 4 horas), não por inatividade inferida.
+  /v1/trajetos/{sessaoId}/encerrar:
+    patch:
+      tags:
+      - Trajetos
+      summary: Encerrar sessão própria; repetição segura
+      operationId: patch_v1_trajetos_sessaoId_encerrar
+      responses:
+        '200':
+          description: Sessão encerrada ou retorno do mesmo encerramento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sessao'
+        '404':
+          description: Sessão de outro usuário ou não encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: sessaoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/dispositivos/pareamentos:
+    post:
+      tags:
+      - Dispositivos
+      summary: Gerar código temporário para dispositivo
+      operationId: post_v1_dispositivos_pareamentos
+      responses:
+        '201':
+          description: Código emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PareamentoCriado'
+              example:
+                codigo: CODIGO_TEMPORARIO_EXEMPLO
+                expiraEm: '2026-11-08T14:10:00-03:00'
+                usoUnico: true
+        '429':
+          description: Tentativas excedidas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Limite de 100 dispositivos ativos atingido; revogados não contam
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroLimiteDispositivos'
+              example:
+                title: Limite de dispositivos ativos
+                status: 409
+                code: LIMITE_DISPOSITIVOS_ATIVOS
+                traceId: exemplo-trace-dispositivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PareamentoEntrada'
+      description: 'A emissão exige JWT do titular e expressa consentimento. Código é curto em validade e de
+        alta entropia, com controle de tentativas. Limite de 100 dispositivos ATIVOS por titular; dispositivos
+        revogados não contam. A criação do 101º pareamento enquanto já há 100 ativos retorna HTTP 409
+        LIMITE_DISPOSITIVOS_ATIVOS. Pareamento apenas emitido não conta como ativo. O limite é revalidado de
+        maneira atômica ao ativar para evitar ultrapassagem por ativações concorrentes.' 
+  /v1/dispositivos/ativar:
+    post:
+      tags:
+      - Dispositivos
+      summary: Resgatar pareamento em ESP32/Wokwi
+      operationId: post_v1_dispositivos_ativar
+      responses:
+        '201':
+          description: Credencial emitida uma única vez
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredencialDispositivo'
+        '409':
+          description: 'Conflito: código usado/expirado ou limite de 100 dispositivos ativos atingido. Para
+            limite, retorna code LIMITE_DISPOSITIVOS_ATIVOS conforme ErroLimiteDispositivos.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Excesso de tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtivacaoDispositivo'
+      security: []
+      description: 'Enviar chave uma vez por HTTPS; persistir apenas hash. Reutilização do código falha.
+        Antes de emitir credencial, revalidar ATOMICAMENTE máximo de 100 dispositivos ativos por titular,
+        inclusive sob ativações paralelas; revogados não contam. Se o limite já foi atingido, HTTP 409 com
+        code LIMITE_DISPOSITIVOS_ATIVOS; não consumir o código por motivo de limite (até expiração).'
+
+  /v1/dispositivos/{dispositivoId}:
+    delete:
+      tags:
+      - Dispositivos
+      summary: Revogar dispositivo próprio
+      operationId: delete_v1_dispositivos_dispositivoId
+      responses:
+        '204':
+          description: Dispositivo revogado
+        '404':
+          description: Não encontrado ou de outra conta
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      parameters:
+      - name: dispositivoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+  /v1/admin/metricas:
+    get:
+      tags:
+      - Administracao
+      summary: Métricas agregadas, sem PII
+      operationId: get_v1_admin_metricas
+      responses:
+        '200':
+          description: Indicadores operacionais
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metricas'
+        '403':
+          description: Somente administrador
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /health:
+    get:
+      tags:
+      - Saude
+      summary: Verificar saúde pública do processo
+      operationId: get_health
+      responses:
+        '200':
+          description: API ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Saude'
+        '503':
+          description: Dependência essencial indisponível
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      security: []
+  /v1/auth/renovar:
+    post:
+      tags:
+      - Autenticacao
+      operationId: post_v1_auth_renovar
+      summary: Renovar JWT usando refresh token rotativo
+      description: 'Access JWT: 60 min; refresh: expiração deslizante após 7 dias de inatividade, limitada
+        por prazo absoluto de 30 dias desde login. Rotação atômica. Durante 45 s após rotação, replay do token
+        anterior DEVE retornar o MESMO par access+refresh do primeiro sucesso, sem nova rotação. Guardar resposta
+        de replay cifrada (AEAD) por 45 s e o hash dos tokens; nunca guardar refresh em claro permanente. Fora
+        da tolerância, reutilização é suspeita e revoga família. Exigir single-flight de renovação no app,
+        com retry de rede do MESMO token durante janela. Não é promessa de funcionamento offline nem no background
+        iOS. Família revogada ou prazo absoluto concluído exige autenticação; app deve informar falha sem declarar
+        pedido registrado.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenovarTokenEntrada'
+            example:
+              refreshToken: REFRESH_FICTICIO_NAO_VALIDO_E_USO_UNICO
+      responses:
+        '200':
+          description: Access e refresh tokens rotacionados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokensAuth'
+              example: *id001
+        '401':
+          description: Refresh inexistente, revogado, expirado ou reutilizado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Muitas tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/contatos/convites/{conviteId}:
+    delete:
+      tags:
+      - Contatos
+      operationId: delete_v1_contatos_convites_conviteId
+      summary: Cancelar convite ainda nao resgatado
+      description: Somente o emissor autenticado pode invalidar convite pendente. O URL recebe conviteId opaco,
+        nunca o codigo secreto.
+      parameters:
+      - name: conviteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Convite cancelado; codigo inutilizavel
+        '404':
+          description: Convite ausente ou de outra conta
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Convite ja resgatado ou encerrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/trajetos/ativa:
+    get:
+      tags:
+      - Trajetos
+      operationId: get_v1_trajetos_ativa
+      summary: Recuperar a sessao propria em andamento
+      description: A autenticacao identifica titular. Retorna 204 se nao houver sessao ativa; sessao expirada
+        nao e ativa.
+      responses:
+        '200':
+          description: Sessao ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sessao'
+        '204':
+          description: Nenhuma sessao ativa
+        '401':
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/rotas/avaliar:
+    post:
+      tags:
+      - Rotas
+      operationId: post_v1_rotas_avaliar
+      summary: Comparar exposicao relativa de rotas a pe sem persistir percurso
+      description: 'API consulta provedor externo de rotas a pé sem gravar geometria, origem ou destino. Para
+        cada trecho conhecido, K = soma(metros_do_trecho × riscoRelativo). Lknown = soma metros com estimativa;
+        Ltotal = distância total. ExposicaoRelativa = (K/Lknown) × Ltotal (unidade: metro ponderado pelo risco
+        relativo), apenas quando Lknown>0 e cobertura = 100×Lknown/Ltotal >=70%. Os trechos desconhecidos NÃO
+        são tratados como risco zero; a estimativa extrapola média observada ao trecho não observado e divulga
+        percentualSemEstimativa = 100 - cobertura. Não representa probabilidade individual. Se qualquer rota
+        tiver cobertura<70% → inconclusiva, todas posicao=null, mas preservar exposição individual nas rotas
+        com cobertura suficiente; se nenhuma alternativa ou provedor/grade indisponível → indisponivel com
+        rotas=[]. Ranking concluído: menor exposição estimada primeiro; diferença relativa menor que 5% do
+        MENOR valor → empate técnico e mesma posicao (não ranquear diferenças espúrias). Se só uma rota válida,
+        inconclusiva, motivo=apenas_uma_rota, posicao=null. Tempo da passagem no trecho: saidaEm + (distância
+        acumulada até início do trecho / distância total) × duracaoSegundos, com velocidade média uniforme
+        assumida; fatiar trechos que cruzem hora civil/meia-noite e usar faixa e tipoDia em America/Sao_Paulo
+        para cada fatia; sábado/domingo=fim_semana, feriados conforme calendário de produção homologado (pendente);
+        v0.5 usa sábado/domingo como fim_semana. saidaEm deve ser ISO datetime com offset e respeitar a janela
+        relativa ao relógio UTC do servidor; fora dela retorna 422 SAIDA_FORA_JANELA, não classifica como risco
+        zero. Se versaoGrade da comparação divergir da grade em cache, app obtém snapshot da mesma versão antes
+        de sobrepor cores/ranking; se não conseguir, não exibe comparação como sincronizada. Privacidade: nenhum
+        destino/geometria no banco ou logs, e nenhum dado fora da requisição ou resposta efêmera. Cobertura
+        de 70% e empate de 5% são PARAMETROS PROPOSTOS para validação da equipe.  Janela obrigatória avaliada
+        no instante da requisição pelo relógio do servidor: agoraUTC - 5min <= saidaEm <= agoraUTC + 48h; depois
+        de receber as alternativas, saidaEm + MAIOR duracaoSegundos <= agoraUTC + 48h. Instantes comparados
+        em UTC; classificação de tipoDia/faixa em America/Sao_Paulo. Fora da janela: 422 SAIDA_FORA_JANELA;
+        NÃO depende de periodoDados ou validade da versão de grade. Chamada em outra data pode ter resultado
+        distinto. Precedência de resultados: falha do provedor, ausência de alternativa, grade indisponível
+        ou fora do território -> indisponivel; existindo rotas, qualquer cobertura <70% -> inconclusiva/cobertura_insuficiente
+        (inclusive rota única); caso uma rota >=70% -> inconclusiva/apenas_uma_rota, EXIBE nota sem ranking
+        com texto "Rota avaliada; sem alternativas para comparar"; 2-3 rotas todas >=70% -> concluida. Toda
+        rota listada traz geometria não vazia; não usar mapa cache de outra versão. Empate com 2-3 rotas: ordenar
+        por exposição crescente, agrupar a partir da menor estimativa restante usando diferença E/Emenor <5%,
+        atribuir a mesma posição densa ao grupo e repetir; exemplo 1000/1040/1080 -> 1,1,2. Exatamente 5% já
+        não empata. Retornar rotas ordenadas por posicao/nota/rotaId. Para grade com cobertura parcial não
+        representar desconhecido como risco 0.
+
+        Regra v0.5: território fora da cobertura retorna 200 situacao=indisponivel/motivo=fora_territorio,
+        NUNCA 422. Em inconclusiva/cobertura_insuficiente, cada rota com cobertura >=70% mantém sua exposição
+        relativa com duas casas decimais e posicao=null; rota abaixo de 70% fica com exposicaoRelativa=null
+        e posicao=null. Não apresentar ranking parcial. A API usa decimal e arredonda exposição para 2 casas
+        (arredondamento de meio afastado de zero) ANTES de ranquear e empatar; posição densa é calculada somente
+        a partir dos valores retornados. Nenhuma posição usa valor oculto mais preciso. Empate ocorre com diferença
+        estritamente <5% em relação à âncora do grupo. Em rota única com >=70%, motivo=apenas_uma_rota e nota
+        exibida sem ranking. A janela UTC da partida/chegada é independente do período histórico da grade.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvaliacaoRotasEntrada'
+            example:
+              origem:
+                latitude: -23.551
+                longitude: -46.637
+              destino:
+                latitude: -23.557
+                longitude: -46.643
+              saidaEm: '2026-11-08T21:50:00-03:00'
+      responses:
+        '200':
+          description: Comparacao concluida, inconclusiva ou indisponivel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvaliacaoRotasResultado'
+              examples:
+                concluida:
+                  summary: Comparação de duas rotas
+                  value:
+                    situacao: concluida
+                    motivo: null
+                    versaoGrade: mock-2026-11-08-v1
+                    coberturaMinimaPercentual: 70
+                    rotas:
+                    - rotaId: r1
+                      distanciaMetros: 900
+                      duracaoSegundos: 720
+                      exposicaoRelativa: 1020
+                      percentualSemEstimativa: 0
+                      geometriaCodificada: vxvnCfxs{GnKnK~W~W
+                      posicao: 1
+                    - rotaId: r2
+                      distanciaMetros: 1100
+                      duracaoSegundos: 880
+                      exposicaoRelativa: 1300
+                      percentualSemEstimativa: 10
+                      geometriaCodificada: vxvnCfxs{GbBf^zT~WnKwQ
+                      posicao: 2
+                    unidadeExposicao: metro_risco_relativo
+                    metodoTrechoDesconhecido: extrapolacao_media_trechos_conhecidos
+                    empateTecnicoPercentual: 5
+                coberturaMista:
+                  summary: Uma rota suficiente + outra insuficiente
+                  value:
+                    unidadeExposicao: metro_risco_relativo
+                    metodoTrechoDesconhecido: extrapolacao_media_trechos_conhecidos
+                    empateTecnicoPercentual: 5
+                    situacao: inconclusiva
+                    motivo: cobertura_insuficiente
+                    versaoGrade: mock-2026-11-08-v1
+                    coberturaMinimaPercentual: 70
+                    rotas:
+                    - rotaId: boa
+                      distanciaMetros: 1000
+                      duracaoSegundos: 840
+                      exposicaoRelativa: 1100.25
+                      percentualSemEstimativa: 5
+                      geometriaCodificada: vxvnCfxs{GnKnK~W~W
+                      posicao: null
+                    - rotaId: incompleta
+                      distanciaMetros: 800
+                      duracaoSegundos: 720
+                      exposicaoRelativa: null
+                      percentualSemEstimativa: 40
+                      geometriaCodificada: vxvnCfxs{GbBf^zT~WnKwQ
+                      posicao: null
+                foraTerritorio:
+                  summary: 'Destino fora da área coberta: 200 indisponível'
+                  value:
+                    unidadeExposicao: metro_risco_relativo
+                    metodoTrechoDesconhecido: extrapolacao_media_trechos_conhecidos
+                    empateTecnicoPercentual: 5
+                    situacao: indisponivel
+                    motivo: fora_territorio
+                    versaoGrade: null
+                    coberturaMinimaPercentual: 70
+                    rotas: []
+        '400':
+          description: Parametro invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Limite de requisicoes
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Saída anterior a agora−5min ou chegada posterior a agora+48h, calculadas pelo relógio
+            UTC do servidor; nunca representa fora do território.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroSaidaRota'
+              example:
+                title: Saída fora da janela de consulta
+                status: 422
+                code: SAIDA_FORA_JANELA
+                traceId: trace-sintetico-422
+  /v1/auth/confirmar-email:
+    post:
+      tags:
+      - Autenticacao
+      operationId: post_v1_auth_confirmar_email
+      summary: Confirmar posse do e-mail com token de uso único
+      description: Consome token secreto de 30 min, uso único, recebido por e-mail. A pessoa com posse do token
+        define nome e senha nesta chamada; só então cria/ativa a conta. Conta já existente não tem senha alterada
+        por esse token; código não aparece em query string nem logs. Em dev Mailpit. JWT não exigido. Nunca
+        usar senha fornecida por terceiro no passo registrar.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmarEmailEntrada'
+            example:
+              token: TOKEN_SINTETICO_NAO_VALIDO_0123456789abcdef
+              nome: Pessoa Exemplo
+              senha: SENHA_FICTICIA_NAO_USAR_123!
+      responses:
+        '200':
+          description: Confirmação realizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmarEmailResultado'
+              example:
+                mensagem: E-mail confirmado. Faça login.
+        '400':
+          description: Token malformado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          description: Token inválido, expirado ou consumido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Limite de tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/auth/solicitar-redefinicao:
+    post:
+      tags:
+      - Autenticacao
+      operationId: post_v1_auth_solicitar_redefinicao
+      summary: Solicitar recuperação da senha (sem enumeração)
+      security: []
+      description: Sempre 202 genérico para conta existente/inexistente, sem evidência temporal de existência.
+        Somente conta verificada recebe por e-mail token de reset_senha, nunca enviar na resposta, logs ou
+        query string. Token aleatório com hash no banco, validade 30 min e uso único. SMTP dev via Mailpit
+        restrito; rate-limit por IP e e-mail. Solicitar redefinição não modifica senha, não altera cadastro
+        e não revoga sessões. Não reutilizar token confirmar_email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitarRedefinicaoEntrada'
+            example:
+              email: titular.exemplo@example.invalid
+      responses:
+        '202':
+          description: Aceite genérico
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitarRedefinicaoAceito'
+              example:
+                mensagem: Se os dados forem elegiveis, as instrucoes serao enviadas.
+        '400':
+          description: E-mail malformado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Limite de tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/auth/redefinir-senha:
+    post:
+      tags:
+      - Autenticacao
+      operationId: post_v1_auth_redefinir_senha
+      summary: Trocar senha por token de recuperação
+      security: []
+      description: Consumir token de propósito reset_senha, uso único, válido por 30min, com verificação atômica.
+        Só titular que comprova posse do e-mail pelo token escolhe a nova senha. Token de cadastro não pode
+        redefinir senha. Não mudar senha em registrar. Após sucesso, invalidar todas as famílias de refresh
+        do usuário; para acessos JWT ainda válidos exigir validação de versaoSessao/securityStamp no servidor;
+        chaves vinculadas do ESP32 não são automaticamente revogadas. Erros genéricos sem revelar e-mail. Após
+        redefinir e autenticar-se novamente, titular deve consultar GET /v1/dispositivos e pode revogar dispositivos
+        ativos individualmente; reset de senha NÃO substitui auditoria de dispositivos nem revoga as chaves
+        automaticamente (decisão explícita v0.5).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedefinirSenhaEntrada'
+            example:
+              token: RESET_SINTETICO_NAO_VALIDO_0123456789abcdef
+              novaSenha: SENHA_FICTICIA_NOVA_123!
+      responses:
+        '200':
+          description: Senha atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedefinirSenhaResultado'
+              example:
+                mensagem: Senha redefinida. Faça login novamente.
+        '400':
+          description: Dados malformados
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          description: Token inválido, expirado ou consumido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Limite de tentativas
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /v1/dispositivos:
+    get:
+      tags:
+      - Dispositivos
+      summary: Listar dispositivos vinculados à conta do titular
+      operationId: listarDispositivos
+      description: 'Somente JWT do titular; lista dispositivos ativos e revogados com dispositivoId, estado
+        e metadados não sensíveis, nunca X-Device-Key. Permite localizar e revogar dispositivos depois de redefinir
+        senha. A redefinição revoga refresh/JWT anteriores, mas não revoga automaticamente credenciais do ESP32;
+        após novo login, usar esta listagem e DELETE /v1/dispositivos/{dispositivoId}. Não permitir consultar
+        dispositivos de outro usuário. O limite de 100 é APENAS de dispositivos ATIVOS, revogados não contam.
+        Histórico revogado é paginado (páginas até 100 registros). Ordenação estável por vinculadoEm desc e
+        dispositivoId. O cursor opaco é vinculado ao titular autenticado e à posição de paginação (keyset),
+        com validade de 30 min; não permite consultar páginas de outra conta. A página final omite
+        X-Proximo-Cursor. Novos registros após início de uma listagem aparecem ao reiniciar a consulta.'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: limite
+        in: query
+        required: false
+        description: Quantidade por página, padrão 100, máximo 100.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 100
+      - name: cursor
+        in: query
+        required: false
+        description: Cursor opaco de paginação (30 min), associado ao JWT do titular; omitir na primeira página.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 2048
+      responses:
+        '200':
+          description: Dispositivos do titular (inclusive revogados), página até 100 itens
+          headers:
+            X-Proximo-Cursor:
+              description: Cursor para próxima página; ausente quando não há mais itens. Nunca contém segredos.
+              schema:
+                type: string
+                minLength: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispositivosLista'
+              example:
+              - dispositivoId: aa111111-2222-4333-8444-555555555555
+                tipo: esp32
+                apelido: Botão da mochila
+                estado: ativo
+                vinculadoEm: '2026-11-08T12:00:00-03:00'
+                ultimoUsoEm: '2026-11-08T14:30:00-03:00'
+                revogadoEm: null
+              - dispositivoId: bb111111-2222-4333-8444-555555555555
+                tipo: wokwi
+                apelido: Simulador antigo
+                estado: revogado
+                vinculadoEm: '2026-11-07T12:00:00-03:00'
+                ultimoUsoEm: null
+                revogadoEm: '2026-11-08T13:00:00-03:00'
+        '401':
+          description: JWT ausente ou inválido
+        '400':
+          description: Cursor inválido/expirado ou limite de página inválido
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          description: Excesso de consultas
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    deviceKey:
+      type: apiKey
+      in: header
+      name: X-Device-Key
+      description: Credencial separada e revogável vinculada ao ESP32/Wokwi
+  schemas:
+    Erro:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    Usuario:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+      additionalProperties: false
+      required:
+      - id
+      - nome
+      - email
+    CadastroEntrada:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      additionalProperties: false
+      required:
+      - email
+      description: Solicita token de confirmação por e-mail. NÃO recebe nome nem senha antes da prova de posse.
+        Se e-mail existente, a resposta é idêntica e credenciais ficam inalteradas.
+    LoginEntrada:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        senha:
+          type: string
+      additionalProperties: false
+      required:
+      - email
+      - senha
+    TokensAuth:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum:
+          - Bearer
+        expiraEm:
+          type: string
+          format: date-time
+        usuario:
+          $ref: '#/components/schemas/Usuario'
+        refreshToken:
+          type: string
+          minLength: 16
+          description: Novo refresh token opaco; durante 45s o anterior pode receber exatamente a mesma resposta
+            cifrada armazenada temporariamente.
+        expiraRefreshEm:
+          type: string
+          format: date-time
+          description: Prazo deslizante (7 dias sem uso), máximo absoluto (30 dias após login); parâmetros
+            v0.5 a confirmar pela equipe.
+      additionalProperties: false
+      required:
+      - accessToken
+      - tokenType
+      - expiraEm
+      - usuario
+      - refreshToken
+      - expiraRefreshEm
+    NovoConvite:
+      type: object
+      properties:
+        codigo:
+          type: string
+        expiraEm:
+          type: string
+          format: date-time
+        direcao:
+          type: string
+          enum:
+          - titular_para_contato
+        conviteId:
+          type: string
+          format: uuid
+      additionalProperties: false
+      required:
+      - conviteId
+      - codigo
+      - expiraEm
+      - direcao
+    ResgateConviteEntrada:
+      type: object
+      properties:
+        codigo:
+          type: string
+        decisao:
+          type: string
+          enum:
+          - aceitar
+          - rejeitar
+      additionalProperties: false
+      required:
+      - codigo
+      - decisao
+    Vinculo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        titularId:
+          type: string
+          format: uuid
+        contatoId:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          enum:
+          - aceito
+          - revogado
+        direcao:
+          type: string
+          enum:
+          - titular_para_contato
+        nomeExibicao:
+          type: string
+          minLength: 1
+          description: Nome atual do outro participante na perspectiva de quem consulta, sem e-mail.
+        papelDoSolicitante:
+          type: string
+          enum:
+          - titular
+          - contato
+      additionalProperties: false
+      required:
+      - id
+      - titularId
+      - contatoId
+      - estado
+      - direcao
+      - nomeExibicao
+      - papelDoSolicitante
+      description: Convite pendente/rejeitado/expirado e estado do convite, nao do vinculo; vinculo so existe
+        com aceite.
+    TokenPushEntrada:
+      type: object
+      properties:
+        expoPushToken:
+          type: string
+          pattern: ^ExponentPushToken\[.+\]$|^ExpoPushToken\[.+\]$
+        plataforma:
+          type: string
+          enum:
+          - ios
+          - android
+        instalacaoId:
+          type: string
+          minLength: 1
+          maxLength: 100
+      additionalProperties: false
+      required:
+      - expoPushToken
+      - plataforma
+      - instalacaoId
+    TokenPushResumo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ativo:
+          type: boolean
+      additionalProperties: false
+      required:
+      - id
+      - ativo
+    CelulaRisco:
+      type: object
+      properties:
+        geohash:
+          type: string
+          description: Geohash base32 (sem a, i, l, o)
+          minLength: 6
+          maxLength: 7
+          pattern: ^[0123456789bcdefghjkmnpqrstuvwxyz]{6,7}$
+        faixaHoraria:
+          type: integer
+          minimum: 0
+          maximum: 23
+        tipoDia:
+          type: string
+          enum:
+          - util
+          - fim_semana
+        nivel:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 3
+        riscoRelativo:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+        nOcorrencias:
+          type: integer
+          minimum: 0
+        suficiente:
+          type: boolean
+        motivoDesconhecido:
+          type:
+          - string
+          - 'null'
+          enum:
+          - amostra_insuficiente
+          - sem_referencia
+          - dado_desatualizado
+          - null
+      additionalProperties: false
+      required:
+      - geohash
+      - faixaHoraria
+      - tipoDia
+      - nivel
+      - riscoRelativo
+      - nOcorrencias
+      - suficiente
+      - motivoDesconhecido
+      allOf:
+      - if:
+          properties:
+            suficiente:
+              const: true
+          required:
+          - suficiente
+        then:
+          properties:
+            nivel:
+              type: integer
+              minimum: 0
+              maximum: 3
+            riscoRelativo:
+              type: number
+              minimum: 0
+            motivoDesconhecido:
+              type: 'null'
+          required:
+          - nivel
+          - riscoRelativo
+          - motivoDesconhecido
+        else:
+          properties:
+            nivel:
+              type: 'null'
+            riscoRelativo:
+              type: 'null'
+            motivoDesconhecido:
+              type: string
+              enum:
+              - amostra_insuficiente
+              - sem_referencia
+              - dado_desatualizado
+          required:
+          - nivel
+          - riscoRelativo
+          - motivoDesconhecido
+      description: 'Se suficiente=true: nivel e riscoRelativo presentes e motivoDesconhecido=null. Se false:
+        ambos null e motivo obrigatorio. Limiar e precisao conforme a referencia da grade.'
+    ReferenciaRisco:
+      type: object
+      properties:
+        area:
+          type: string
+        tipo:
+          type: string
+          enum:
+          - frequencia_relativa_ocorrencias
+        denominador:
+          type: string
+        metodo:
+          type: string
+        naoEhProbabilidadeIndividual:
+          type: boolean
+        limiaresNivel:
+          $ref: '#/components/schemas/LimiaresNivel'
+      additionalProperties: false
+      required:
+      - area
+      - tipo
+      - denominador
+      - metodo
+      - naoEhProbabilidadeIndividual
+      - limiaresNivel
+    Grade:
+      type: object
+      properties:
+        versao:
+          type: string
+        fuso:
+          type: string
+          enum:
+          - America/Sao_Paulo
+        dataInicio:
+          type: string
+          format: date
+        dataFim:
+          type: string
+          format: date
+        geradaEm:
+          type: string
+          format: date-time
+        periodoDados:
+          type: string
+        referencia:
+          $ref: '#/components/schemas/ReferenciaRisco'
+        celulas:
+          type: array
+          items:
+            $ref: '#/components/schemas/CelulaRisco'
+          maxItems: 1000
+        precisaoGeohash:
+          type: integer
+          minimum: 6
+          maximum: 7
+        proximoCursor:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          description: Cursor opaco para página seguinte; null na última página. Não é localização do usuário.
+        limitePagina:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Quantidade máxima de células desta página.
+      additionalProperties: false
+      required:
+      - versao
+      - fuso
+      - dataInicio
+      - dataFim
+      - geradaEm
+      - periodoDados
+      - referencia
+      - celulas
+      - precisaoGeohash
+      - proximoCursor
+      - limitePagina
+    VersaoGrade:
+      type: object
+      properties:
+        versao:
+          type: string
+        publicadaEm:
+          type: string
+          format: date-time
+        periodoDados:
+          type: string
+        fuso:
+          type: string
+        precisaoGeohash:
+          type: integer
+          minimum: 6
+          maximum: 7
+        limiaresNivel:
+          $ref: '#/components/schemas/LimiaresNivel'
+      additionalProperties: false
+      required:
+      - versao
+      - publicadaEm
+      - periodoDados
+      - fuso
+      - precisaoGeohash
+      - limiaresNivel
+    ResultadoImportacao:
+      type: object
+      properties:
+        versao:
+          type: string
+        linhasImportadas:
+          type: integer
+          minimum: 1
+        publicadaEm:
+          type: string
+          format: date-time
+      additionalProperties: false
+      required:
+      - versao
+      - linhasImportadas
+      - publicadaEm
+    PanicoEntrada:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          format: uuid
+        origem:
+          type: string
+          enum:
+          - app
+          - watch
+          - esp32
+          description: Origem informativa (app/watch/esp32). Origem nao e prova do relogio e nao entra na comparacao
+            idempotente.
+        latitude:
+          type:
+          - number
+          - 'null'
+          minimum: -90
+          maximum: 90
+        longitude:
+          type:
+          - number
+          - 'null'
+          minimum: -180
+          maximum: 180
+        observacao:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+      additionalProperties: false
+      required:
+      - idempotencyKey
+      - origem
+      description: As coordenadas devem ser ambas numéricas, ambas null, ou ambas omitidas. Nunca uma preenchida
+        e a outra ausente/null. Origem é informativa, mas é validada por classe de credencial.
+      allOf:
+      - oneOf:
+        - properties:
+            latitude:
+              type: number
+              minimum: -90
+              maximum: 90
+            longitude:
+              type: number
+              minimum: -180
+              maximum: 180
+          required:
+          - latitude
+          - longitude
+        - properties:
+            latitude:
+              type: 'null'
+            longitude:
+              type: 'null'
+          required:
+          - latitude
+          - longitude
+        - not:
+            anyOf:
+            - required:
+              - latitude
+            - required:
+              - longitude
+    ResumoDespachos:
+      type: object
+      properties:
+        estado:
+          type: string
+          enum:
+          - sem_destinatarios
+          - em_processamento
+          - aceito_expo
+          - aceito_provedor_push
+          - aberto_no_app
+          - nenhum_envio_confirmado
+        total:
+          type: integer
+          minimum: 0
+        pendentes:
+          type: integer
+          minimum: 0
+        aceitosExpo:
+          type: integer
+          minimum: 0
+        aceitosProvedor:
+          type: integer
+          minimum: 0
+        abertosNoApp:
+          type: integer
+          minimum: 0
+        falhosOuCancelados:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+      required:
+      - estado
+      - total
+      - pendentes
+      - aceitosExpo
+      - aceitosProvedor
+      - abertosNoApp
+      - falhosOuCancelados
+    PanicoRegistrado:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        registradoEm:
+          type: string
+          format: date-time
+        origem:
+          type: string
+          enum:
+          - app
+          - watch
+          - esp32
+        resumo:
+          $ref: '#/components/schemas/ResumoDespachos'
+        reutilizado:
+          type: boolean
+          description: False se primeiro 202; true se replay 200 da mesma intenção. Mostra pedido anterior
+            ao cliente, não confirma entrega do aviso.
+      additionalProperties: false
+      required:
+      - pedidoId
+      - registradoEm
+      - origem
+      - resumo
+      - reutilizado
+    PanicoStatus:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        registradoEm:
+          type: string
+          format: date-time
+        resumo:
+          $ref: '#/components/schemas/ResumoDespachos'
+      additionalProperties: false
+      required:
+      - pedidoId
+      - registradoEm
+      - resumo
+    PanicoRecebidoResumo:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        titularNome:
+          type: string
+        registradoEm:
+          type: string
+          format: date-time
+      additionalProperties: false
+      required:
+      - pedidoId
+      - titularNome
+      - registradoEm
+    PanicoDetalhe:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        titularNome:
+          type: string
+        registradoEm:
+          type: string
+          format: date-time
+        origem:
+          type: string
+          enum:
+          - app
+          - watch
+          - esp32
+        latitude:
+          type:
+          - number
+          - 'null'
+        longitude:
+          type:
+          - number
+          - 'null'
+        observacao:
+          type:
+          - string
+          - 'null'
+        localizacaoDisponivel:
+          type: boolean
+      additionalProperties: false
+      required:
+      - pedidoId
+      - titularNome
+      - registradoEm
+      - origem
+      - latitude
+      - longitude
+      - observacao
+      - localizacaoDisponivel
+    Sessao:
+      type: object
+      properties:
+        sessaoId:
+          type: string
+          format: uuid
+        iniciadaEm:
+          type: string
+          format: date-time
+        expiraEm:
+          type: string
+          format: date-time
+        encerradaEm:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        motivoEncerramento:
+          type:
+          - string
+          - 'null'
+          enum:
+          - manual
+          - tempo_maximo
+          - null
+      additionalProperties: false
+      required:
+      - sessaoId
+      - iniciadaEm
+      - expiraEm
+      - encerradaEm
+      - motivoEncerramento
+    PareamentoEntrada:
+      type: object
+      properties:
+        apelido:
+          type: string
+          minLength: 1
+          maxLength: 80
+      additionalProperties: false
+      required:
+      - apelido
+    PareamentoCriado:
+      type: object
+      properties:
+        codigo:
+          type: string
+        expiraEm:
+          type: string
+          format: date-time
+        usoUnico:
+          type: boolean
+      additionalProperties: false
+      required:
+      - codigo
+      - expiraEm
+      - usoUnico
+    AtivacaoDispositivo:
+      type: object
+      properties:
+        codigo:
+          type: string
+        identificadorLocal:
+          type: string
+          maxLength: 80
+      additionalProperties: false
+      required:
+      - codigo
+      - identificadorLocal
+    CredencialDispositivo:
+      type: object
+      properties:
+        dispositivoId:
+          type: string
+          format: uuid
+        chaveDispositivo:
+          type: string
+        escopo:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+      required:
+      - dispositivoId
+      - chaveDispositivo
+      - escopo
+    Metricas:
+      type: object
+      properties:
+        pedidosRegistrados:
+          type: integer
+          minimum: 0
+        pedidosSemDestinatarios:
+          type: integer
+          minimum: 0
+        despachosAceitosProvedor:
+          type: integer
+          minimum: 0
+        sessoesEncerradas:
+          type: integer
+          minimum: 0
+        periodoInicio:
+          type: string
+          format: date-time
+        periodoFim:
+          type: string
+          format: date-time
+      additionalProperties: false
+      required:
+      - pedidosRegistrados
+      - pedidosSemDestinatarios
+      - despachosAceitosProvedor
+      - sessoesEncerradas
+      - periodoInicio
+      - periodoFim
+    Saude:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degradado
+        versaoApi:
+          type: string
+      additionalProperties: false
+      required:
+      - status
+      - versaoApi
+    CadastroAceito:
+      type: object
+      properties:
+        mensagem:
+          type: string
+          enum:
+          - Se os dados forem elegiveis, a solicitacao de cadastro sera processada.
+      additionalProperties: false
+      required:
+      - mensagem
+      description: Resposta indistinguível para cadastro de e-mail novo e e-mail existente. Não demonstra existência
+        de conta.
+    RenovarTokenEntrada:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          minLength: 16
+      additionalProperties: false
+      required:
+      - refreshToken
+    LimiaresNivel:
+      type: object
+      properties:
+        nivel1Minimo:
+          type: number
+          minimum: 0
+        nivel2Minimo:
+          type: number
+          minimum: 0
+        nivel3Minimo:
+          type: number
+          minimum: 0
+      additionalProperties: false
+      required:
+      - nivel1Minimo
+      - nivel2Minimo
+      - nivel3Minimo
+      description: Cortes inclusivos no inicio de cada nivel. Limiares de exemplo aguardam validacao do ML.
+    PushPedidoAjuda:
+      type: object
+      properties:
+        tipo:
+          type: string
+          const: pedido_ajuda
+        pedidoId:
+          type: string
+          format: uuid
+      additionalProperties: false
+      required:
+      - tipo
+      - pedidoId
+      description: Somente estes dois campos no data payload de push; nunca incluir nome, posicao, observacao,
+        JWT ou token de dispositivo. Notificacao visivel com texto generico.
+    Coordenada:
+      type: object
+      properties:
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+      additionalProperties: false
+      required:
+      - latitude
+      - longitude
+    AvaliacaoRotasEntrada:
+      type: object
+      properties:
+        origem:
+          $ref: '#/components/schemas/Coordenada'
+        destino:
+          $ref: '#/components/schemas/Coordenada'
+        saidaEm:
+          type: string
+          format: date-time
+          description: ISO 8601 com timezone. Servidor valida saída >= agora - 5min, saída <= agora +48h, e
+            término de cada rota <= agora +48h; 422 SAIDA_FORA_JANELA.
+      additionalProperties: false
+      required:
+      - origem
+      - destino
+      - saidaEm
+    RotaAvaliada:
+      type: object
+      properties:
+        rotaId:
+          type: string
+        distanciaMetros:
+          type: number
+          minimum: 0
+        duracaoSegundos:
+          type: number
+          minimum: 0
+        exposicaoRelativa:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          description: 'Unidade: metros ponderados por risco relativo, normalizados por cobertura conhecida.
+            (Σ Lconhecida×risco / LconhecidaTotal)×Ltotal. Quantização contratual: arredondar para duas casas
+            decimais (meio afastado de zero) antes de calcular ranking/empate; valor retornado é o usado no
+            ranking.'
+        percentualSemEstimativa:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: 100 - 100×metrosComEstimativa/metragemTotal. Não é risco zero nem substitui medição.
+        geometriaCodificada:
+          type: string
+          minLength: 1
+          description: Polyline codificada Google Polyline5, retornada inclusive quando comparação inconclusiva;
+            não persistir nem registrar em logs.
+        posicao:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 3
+          description: Posição densa 1,1,2 para empates (grupos ancorados no menor valor ainda não classificado).
+            Inconclusiva sempre null. Posição calculada a partir de exposicaoRelativa de duas casas exibida
+            ao cliente.
+      additionalProperties: false
+      required:
+      - rotaId
+      - distanciaMetros
+      - duracaoSegundos
+      - exposicaoRelativa
+      - percentualSemEstimativa
+      - geometriaCodificada
+      - posicao
+    AvaliacaoRotasResultado:
+      type: object
+      properties:
+        situacao:
+          type: string
+          enum:
+          - concluida
+          - inconclusiva
+          - indisponivel
+          description: 'concluida: todas rotas classificadas; inconclusiva: sem posições; indisponivel: rotas
+            vazias.'
+        motivo:
+          type:
+          - string
+          - 'null'
+          enum:
+          - null
+          - cobertura_insuficiente
+          - apenas_uma_rota
+          - provedor_rotas_indisponivel
+          - sem_alternativas
+          - grade_indisponivel
+          - fora_territorio
+          description: 'Precedência: indisponível > cobertura insuficiente > rota única >=70% > comparação
+            concluída. Fora território é indisponivel.'
+        versaoGrade:
+          type:
+          - string
+          - 'null'
+        coberturaMinimaPercentual:
+          type: number
+          const: 70
+          description: Valor normativo fixado na v0.5. Alteração requer versionamento de contrato.
+        rotas:
+          type: array
+          items:
+            $ref: '#/components/schemas/RotaAvaliada'
+          maxItems: 3
+        unidadeExposicao:
+          type: string
+          const: metro_risco_relativo
+        metodoTrechoDesconhecido:
+          type: string
+          const: extrapolacao_media_trechos_conhecidos
+        empateTecnicoPercentual:
+          type: number
+          const: 5
+          description: Diferença estritamente inferior a 5% da menor exposição do grupo; grupos sucessivos,
+            posições densas.
+      additionalProperties: false
+      required:
+      - situacao
+      - motivo
+      - versaoGrade
+      - coberturaMinimaPercentual
+      - rotas
+      - unidadeExposicao
+      - metodoTrechoDesconhecido
+      - empateTecnicoPercentual
+      description: 'Comparação com limite de 70%. Se qualquer rota estiver abaixo: inconclusiva, todas sem
+        posição; notas preservadas só para rotas com >=70%. O schema valida notas individuais; ordem e empate
+        são testados no validador de domínio.'
+      allOf:
+      - if:
+          properties:
+            situacao:
+              const: concluida
+          required:
+          - situacao
+        then:
+          properties:
+            motivo:
+              type: 'null'
+            versaoGrade:
+              type: string
+              minLength: 1
+            rotas:
+              minItems: 2
+              maxItems: 3
+              items:
+                allOf:
+                - $ref: '#/components/schemas/RotaAvaliada'
+                - properties:
+                    posicao:
+                      type: integer
+                      minimum: 1
+                      maximum: 3
+                    exposicaoRelativa:
+                      type: number
+                      minimum: 0
+                    percentualSemEstimativa:
+                      maximum: 30
+                    geometriaCodificada:
+                      type: string
+                      minLength: 1
+      - if:
+          properties:
+            situacao:
+              const: inconclusiva
+          required:
+          - situacao
+        then:
+          properties:
+            motivo:
+              enum:
+              - cobertura_insuficiente
+              - apenas_uma_rota
+      - if:
+          properties:
+            situacao:
+              const: inconclusiva
+            motivo:
+              const: apenas_uma_rota
+          required:
+          - situacao
+          - motivo
+        then:
+          properties:
+            versaoGrade:
+              type: string
+              minLength: 1
+            rotas:
+              minItems: 1
+              maxItems: 1
+              items:
+                allOf:
+                - $ref: '#/components/schemas/RotaAvaliada'
+                - properties:
+                    posicao:
+                      type: 'null'
+                    exposicaoRelativa:
+                      type: number
+                      minimum: 0
+                    percentualSemEstimativa:
+                      maximum: 30
+      - if:
+          properties:
+            situacao:
+              const: inconclusiva
+            motivo:
+              const: cobertura_insuficiente
+          required:
+          - situacao
+          - motivo
+        then:
+          properties:
+            versaoGrade:
+              type: string
+              minLength: 1
+            rotas:
+              minItems: 1
+              maxItems: 3
+              contains:
+                properties:
+                  percentualSemEstimativa:
+                    exclusiveMinimum: 30
+                required:
+                - percentualSemEstimativa
+              items:
+                allOf:
+                - $ref: '#/components/schemas/RotaAvaliada'
+                - if:
+                    properties:
+                      percentualSemEstimativa:
+                        maximum: 30
+                    required:
+                    - percentualSemEstimativa
+                  then:
+                    properties:
+                      exposicaoRelativa:
+                        type: number
+                        minimum: 0
+                      posicao:
+                        type: 'null'
+                  else:
+                    properties:
+                      exposicaoRelativa:
+                        type: 'null'
+                      posicao:
+                        type: 'null'
+      - if:
+          properties:
+            situacao:
+              const: indisponivel
+          required:
+          - situacao
+        then:
+          properties:
+            motivo:
+              enum:
+              - provedor_rotas_indisponivel
+              - sem_alternativas
+              - grade_indisponivel
+              - fora_territorio
+            rotas:
+              maxItems: 0
+    ConfirmarEmailEntrada:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 32
+          maxLength: 512
+        nome:
+          type: string
+          minLength: 2
+          maxLength: 100
+        senha:
+          type: string
+          minLength: 10
+          maxLength: 128
+          description: Senha escolhida pela pessoa que possui o token; nunca armazenar em log.
+      required:
+      - token
+      - nome
+      - senha
+      description: O destinatário do e-mail escolhe seu próprio nome e senha SOMENTE ao confirmar o token.
+        Impede ativação com senha escolhida por terceiro que iniciou o registro.
+    ConfirmarEmailResultado:
+      type: object
+      additionalProperties: false
+      properties:
+        mensagem:
+          type: string
+          enum:
+          - E-mail confirmado. Faça login.
+      required:
+      - mensagem
+    ErroBbox:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 400
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+          - BBOX_INVALIDA
+          - FILTRO_REGIAO_INVALIDO
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    ErroPanicoValidacao:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 422
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+          - ORIGEM_CREDENCIAL_INCOMPATIVEL
+          - COORDENADAS_INCOMPLETAS
+          - PAYLOAD_INVALIDO
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    ErroConflitoIdempotencia:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 409
+        detail:
+          type: string
+        code:
+          type: string
+          const: IDEMPOTENCIA_CREDENCIAL_DIVERGENTE
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    ConvitePendenteResumo:
+      type: object
+      additionalProperties: false
+      properties:
+        conviteId:
+          type: string
+          format: uuid
+        expiraEm:
+          type: string
+          format: date-time
+        estado:
+          type: string
+          const: pendente
+        direcao:
+          type: string
+          const: titular_para_contato
+      required:
+      - conviteId
+      - expiraEm
+      - estado
+      - direcao
+      description: Listagem restrita ao titular; não retorna código de convite, e-mail ou token.
+    ErroSaidaRota:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 422
+        detail:
+          type: string
+        code:
+          type: string
+          const: SAIDA_FORA_JANELA
+          description: O único motivo de 422 em rotas é a janela de horário relativa ao relógio do servidor.
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Somente 422 SAIDA_FORA_JANELA. Fora de território é 200 indisponivel/fora_territorio.
+    SolicitarRedefinicaoEntrada:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+      additionalProperties: false
+      description: Mesmo resultado HTTP e tempo observável para e-mail existente ou inexistente.
+    RedefinirSenhaEntrada:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 32
+          maxLength: 512
+        novaSenha:
+          type: string
+          minLength: 10
+          maxLength: 128
+      required:
+      - token
+      - novaSenha
+      additionalProperties: false
+      description: Token uso único, 30 min, propósito reset_senha, inválido para confirmação de cadastro.
+    SolicitarRedefinicaoAceito:
+      type: object
+      properties:
+        mensagem:
+          type: string
+          const: Se os dados forem elegiveis, as instrucoes serao enviadas.
+      required:
+      - mensagem
+      additionalProperties: false
+    RedefinirSenhaResultado:
+      type: object
+      properties:
+        mensagem:
+          type: string
+          const: Senha redefinida. Faça login novamente.
+      required:
+      - mensagem
+      additionalProperties: false
+    ErroLimiteDispositivos:
+      type: object
+      additionalProperties: false
+      description: Limite de dispositivos ativos excedido. Histórico revogado não consome vagas.
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 409
+        detail:
+          type: string
+        code:
+          type: string
+          const: LIMITE_DISPOSITIVOS_ATIVOS
+        traceId:
+          type: string
+      required:
+      - title
+      - status
+      - code
+      - traceId
+    DispositivoResumo:
+      type: object
+      additionalProperties: false
+      description: Dispositivo vinculado ao titular, sem credencial secreta. Revogados continuam visíveis no
+        histórico administrativo pessoal.
+      properties:
+        dispositivoId:
+          type: string
+          format: uuid
+        tipo:
+          type: string
+          enum:
+          - esp32
+          - wokwi
+        apelido:
+          type: string
+          minLength: 1
+          maxLength: 80
+        estado:
+          type: string
+          enum:
+          - ativo
+          - revogado
+        vinculadoEm:
+          type: string
+          format: date-time
+        ultimoUsoEm:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revogadoEm:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - dispositivoId
+      - tipo
+      - apelido
+      - estado
+      - vinculadoEm
+      - ultimoUsoEm
+      - revogadoEm
+      allOf:
+      - if:
+          properties:
+            estado:
+              const: ativo
+        then:
+          properties:
+            revogadoEm:
+              type: 'null'
+      - if:
+          properties:
+            estado:
+              const: revogado
+        then:
+          properties:
+            revogadoEm:
+              type: string
+              format: date-time
+    DispositivosLista:
+      type: array
+      items:
+        $ref: '#/components/schemas/DispositivoResumo'
+      maxItems: 100
+x-decisoes-pendentes:
+- Método estatístico e limiares risco (Nando)
+- Confirmar rota intermediada pela API ou pelo app (Mari/Abner)
+- Validade da confirmação e-mail 30 min, refresh 7d/30d e tolerância 45s
+- Parâmetros 70% cobertura / 5% empate / 0.02° bbox
+- Período de retenção de localização, coordenação com LGPD
+- Provedor externo de rotas e horários de atuação do iOS

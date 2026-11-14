@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Hoodi.Api/Hoodi.Api.csproj" />
+  <Project Path="Hoodi.Application/Hoodi.Application.csproj" />
+  <Project Path="Hoodi.Domain/Hoodi.Domain.csproj" />
+  <Project Path="Hoodi.Infrastructure/Hoodi.Infrastructure.csproj" />
+  <Project Path="Hoodi.Tests/Hoodi.Tests.csproj" />
+</Solution>

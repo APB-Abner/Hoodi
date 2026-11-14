@@ -1,0 +1,13 @@
+﻿@Hoodi.Api_HostAddress = https://localhost:7001
+
+GET {{Hoodi.Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+POST {{Hoodi.Api_HostAddress}}/v1/auth/registrar
+Content-Type: application/json
+
+{"email":"demo@example.invalid"}
+
+###

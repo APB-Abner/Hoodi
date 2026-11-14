@@ -1,0 +1,13 @@
+﻿# TEMPLATE ONLY. Install outside the checkout as /etc/hoodi/hoodi.env.
+# Owner root:root, mode 0600. Do not commit the completed file.
+Database__ConnectionString="Data Source=/var/lib/hoodi/hoodi.db"
+DataProtection__KeysPath=/var/lib/hoodi/keys
+# Set privately to Base64 encoding of at least 32 cryptographically random bytes.
+# Keep the same value after restarts and application updates.
+Jwt__SigningKey=
+Smtp__Host=127.0.0.1
+Smtp__Port=1025
+
+# HTTPS is the default. Only for the isolated HTTP demo, explicitly set false.
+Https__RedirectEnabled=true
+Https__Port=443

@@ -1,0 +1,25 @@
+﻿[Unit]
+Description=hoodi Mailpit demo inbox
+After=network.target
+
+[Service]
+Type=simple
+User=hoodi
+Group=hoodi
+ExecStart=/usr/local/bin/mailpit
+Environment=MP_SMTP_BIND_ADDR=127.0.0.1:1025
+Environment=MP_UI_BIND_ADDR=127.0.0.1:8025
+Environment=MP_DATABASE=/var/lib/hoodi-mailpit/messages.db
+StateDirectory=hoodi-mailpit
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hoodi-mailpit
+
+[Install]
+WantedBy=multi-user.target
