@@ -1,6 +1,6 @@
 # hoodi — API
 
-Backend em .NET 10. A autenticação, contatos/convites e o registro de tokens Expo estão implementados, incluindo os patches v0.5.2 e v0.5.3 de convites e validação. Grade de risco, pedido de ajuda, rotas e endpoints de compatibilidade de dispositivos continuam pendentes. A atualização da grade para H3 depende do contrato de dados do Nando.
+Backend em .NET 10. A autenticação, contatos/convites e o registro de tokens Expo estão implementados, incluindo os patches v0.5.2 e v0.5.3 de convites e validação. Grade de risco, pedido de ajuda, rotas e endpoints de compatibilidade de dispositivos continuam pendentes. A decisão vigente da grade v0.6 é H3 resolução 9 (`h3_cell`), cinco faixas (`0–4`) e níveis de risco `0–3`, conforme o fechamento mais recente do Nando; veja [o contrato do snapshot v1](docs/risk-snapshot-v1-v0.6.md).
 
 ## Integrantes
 
@@ -144,7 +144,7 @@ Os testes usam dados sintéticos, arquivos SQLite isolados, migration real e rel
 
 A recriação de host automatizada não prova o teste de falha Linux. Ainda falta executar na VM o encerramento do processo e reinício pelo systemd, validar nginx/TLS real, permissões e envio pelo Mailpit. A integração dos deep links no app também permanece pendente.
 
-A baseline v0.5.1 foi preservada. O patch v0.5.2 definiu o resgate de convites; a v0.5.3 acrescenta normalização e respostas 400. A v0.6 e o formato H3 continuam sujeitos às decisões da equipe.
+A baseline v0.5.1 foi preservada. O patch v0.5.2 definiu o resgate de convites; a v0.5.3 acrescenta normalização e respostas 400. A v0.6 ainda precisa implementar o snapshot H3 resolução 9 definido no [registro do produtor](docs/risk-snapshot-v1-v0.6.md), usando o CSV completo, manifesto e fixture reais.
 
 Referências de configuração: [proxy e forwarded headers](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0) e [persistência de chaves do Data Protection](https://learn.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/overview?view=aspnetcore-10.0).
 
