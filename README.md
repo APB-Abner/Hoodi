@@ -133,7 +133,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 78 testes passaram. O modelo EF continua consistente com as migrations, e o validador do contrato passou em modo normal e com `python -O`. Os testes cobrem os módulos e os patches, incluindo normalização dos códigos e os modos HTTP/HTTPS. Evidência local: `artifacts/test-results/utc-refactor.trx` (ignorada pelo Git).
+Última execução: 97 testes .NET e 16 testes dos módulos do Pet passaram. O modelo EF continua consistente com as migrations, e o validador do contrato passou em modo normal e com `python -O`. A suíte .NET inclui logout, isolamento de contas/sessões e publicação de snapshots com entradas sintéticas, inclusive rollback após escrita SQL. Evidência local: `artifacts/test-results/v0.6-preparation.trx` (ignorada pelo Git). No Windows restrito, foi necessário desabilitar o destino Event Log apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`); a primeira execução falhou por falta de permissão nesse log.
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
@@ -175,9 +175,11 @@ O código canônico tem 64 caracteres hexadecimais em maiúsculas. O app monta `
 
 ### Sair do app — integração atual e v0.6
 
-Não há endpoint de logout nesta versão. Ao registrar o push, o app guarda o `id` retornado. Antes de apagar JWT, refresh e demais dados locais, chama `DELETE /v1/push/tokens/{id}` com o JWT ainda disponível e espera a desativação. Se apagar o JWT antes, não consegue autenticar esse DELETE. Sem confirmação do servidor, a saída local não garante desativar o push remoto. A troca de conta continua desativando a associação anterior do mesmo token Expo, mas não substitui esse passo de saída.
+O app chama `POST /v1/auth/sair` com JWT válido e corpo `{"instalacaoId":"identificador-usado-no-push"}` antes de apagar as credenciais locais. O retorno 204 confirma a revogação da sessão atual e a desativação do push dessa instalação na mesma transação. Outras sessões e instalações continuam válidas. O endpoint funciona mesmo sem push registrado.
 
-Para a v0.6, fica planejado `POST /v1/auth/sair`, revogando a sessão e desativando o push da instalação informada. Esse endpoint não foi implementado nem adicionado ao contrato v0.5.3. A validação ponta a ponta no app permanece com a Mari.
+Repetir com o JWT já revogado retorna 401; esse retorno sozinho não comprova a desativação do push. A integração no aparelho permanece com a Mari. Para clientes ainda na v0.5.3, permanece o fluxo anterior: aguardar o `DELETE /v1/push/tokens/{id}` autenticado antes de limpar os tokens locais. O [contrato incremental do logout](contracts/v0.6/logout.openapi.yaml) preserva o contrato completo da v0.5.3.
+
+A versão em integração é `0.6.0-draft`, com logout e estrutura inicial de publicação de snapshots. Veja [os limites desta entrega](docs/v0.6-implementation.md): o importador ainda não está habilitado e depende dos arquivos reais e do validador H3. O código fornecido do Pet está em [iot/hoodi-pet](iot/README.md), incluindo módulos BLE; não é um aplicativo Expo completo.
 
 
 

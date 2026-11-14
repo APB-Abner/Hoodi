@@ -146,6 +146,24 @@ public sealed class AutenticacaoService(
         await tx.CommitAsync(ct);
     }
 
+    public async Task SairAsync(Guid usuarioId, Guid sessaoId, SairEntrada entrada, CancellationToken ct)
+    {
+        var instalacao = entrada.InstalacaoId.Trim();
+        var agora = relogio.GetUtcNow();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var sessao = await db.Sessoes.SingleOrDefaultAsync(x => x.Id == sessaoId && x.UsuarioId == usuarioId, ct);
+        var usuario = await db.Usuarios.SingleOrDefaultAsync(x => x.Id == usuarioId, ct);
+        if (sessao is null || usuario is null) throw TokenInvalido();
+        try { sessao.Validar(usuario.SecurityStamp, agora); }
+        catch (DomainException) { throw TokenInvalido(); }
+        sessao.Revogar(agora);
+        foreach (var push in await db.TokensPush.Where(x => x.UsuarioId == usuarioId && x.InstalacaoId == instalacao && x.Ativo).ToListAsync(ct))
+            push.Desativar(agora);
+        foreach (var refresh in await db.RefreshTokens.Where(x => x.SessaoId == sessaoId && x.ReplayCifrado != null).ToListAsync(ct))
+            refresh.ReplayCifrado = null;
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
     public async Task<bool> ValidarSessaoAsync(Guid usuarioId, Guid sessaoId, string stamp, CancellationToken ct)
     {
         var usuario = await db.Usuarios.AsNoTracking().SingleOrDefaultAsync(x => x.Id == usuarioId, ct);

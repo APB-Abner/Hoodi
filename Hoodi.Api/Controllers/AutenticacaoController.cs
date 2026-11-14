@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.AspNetCore.Authorization;
+using System.Diagnostics;
 using Hoodi.Application.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -59,6 +60,14 @@ public sealed class AutenticacaoController(IAutenticacaoService auth, Hoodi.Api.
         return Ok(new MensagemResultado("Senha redefinida. Faça login novamente."));
     }
 
+    [Authorize, HttpPost("sair")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Sair(SairEntrada entrada, CancellationToken ct)
+    {
+        await auth.SairAsync(Guid.Parse(User.FindFirst("sub")!.Value), Guid.Parse(User.FindFirst("sid")!.Value), entrada, ct);
+        return NoContent();
+    }
     private static async Task RespostaGenericaAsync(Func<Task> operacao, CancellationToken ct)
     {
         var inicio = Stopwatch.GetTimestamp();

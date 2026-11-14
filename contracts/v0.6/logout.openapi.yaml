@@ -1,0 +1,56 @@
+﻿openapi: 3.1.0
+info:
+  title: hoodi - v0.6 incremental logout contract
+  version: 0.6.0-draft
+  description: >-
+    Partial contract for the implemented logout operation. Existing operations remain
+    described by the preserved v0.5.3 contract. The H3 import/publication contract is
+    not frozen until Nando's producer artifacts are available. This is not a complete
+    v0.6 release. Runtime /openapi/v1.json lists all currently implemented operations.
+paths:
+  /v1/auth/sair:
+    post:
+      operationId: post_v1_auth_sair
+      tags: [Autenticacao]
+      security:
+      - bearerAuth: []
+      summary: Revoke current session and deactivate this account's installation push
+      description: >-
+        User and session are inferred exclusively from the validated JWT sub/sid.
+        In one transaction revoke that refresh family, clear its encrypted replay,
+        and deactivate only the authenticated user's push matching instalacaoId.
+        Other sessions and installations remain unchanged. An installation without
+        a registered push does not prevent logout. An already revoked/expired JWT
+        receives 401, including a retry after successful logout. The caller supplies
+        its installation identifier; the current login contract does not bind that
+        identifier cryptographically to the session. A 401 does not prove push was
+        deactivated. Client clears local credentials after confirmed 204.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [instalacaoId]
+              properties:
+                instalacaoId:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Same identifier used when registering this installation's push; outer spaces are trimmed.
+      responses:
+        '204':
+          description: Current session revoked and matching own push deactivated; no body
+        '400':
+          description: DADOS_INVALIDOS - missing, malformed or extra request fields
+        '401':
+          description: Authentication or current session invalid; no logout side effects guaranteed
+        '429':
+          description: LIMITE_TENTATIVAS - authentication IP limiter exceeded
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

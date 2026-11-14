@@ -264,7 +264,7 @@ public sealed class ContactsAndPushIntegrationTests
         Assert.Equal("SYNTHETIC_HASH", (await db.Usuarios.SingleAsync()).SenhaHash);
         Assert.Empty(await db.Convites.ToListAsync());
         Assert.Empty(await db.TokensPush.ToListAsync());
-        Assert.Equal(2, (await db.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(3, (await db.Database.GetAppliedMigrationsAsync()).Count());
     }
     [Theory]
     [InlineData("aceitar")]
@@ -362,12 +362,12 @@ public sealed class ContactsAndPushIntegrationTests
     }
 
     [Fact]
-    public async Task OpenApi_DevePublicarPatch053ERespostasDoResgate()
+    public async Task OpenApi_DevePublicarContratoEmIntegracaoERespostasDoResgate()
     {
         using var factory = new AuthFactory();
         using var client = factory.Client();
         using var document = System.Text.Json.JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
-        Assert.Equal("0.5.3", document.RootElement.GetProperty("info").GetProperty("version").GetString());
+        Assert.Equal("0.6.0-draft", document.RootElement.GetProperty("info").GetProperty("version").GetString());
         var responses = document.RootElement.GetProperty("paths").GetProperty("/v1/contatos/convites/resgatar")
             .GetProperty("post").GetProperty("responses");
         foreach (var status in new[] { "200", "204", "400", "409", "422" })

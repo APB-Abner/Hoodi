@@ -20,6 +20,8 @@ public sealed record RenovarEntrada([Required, StringLength(512, MinimumLength =
 public sealed record RedefinirSenhaEntrada(
     [Required, StringLength(512, MinimumLength = 32)] string Token,
     [Required, StringLength(128, MinimumLength = 10)] string NovaSenha);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record SairEntrada([Required, StringLength(100, MinimumLength = 1)] string InstalacaoId);
 public sealed record MensagemResultado(string Mensagem);
 public sealed record UsuarioResumo(Guid Id, string Nome, string Email);
 public sealed record TokensAuth(string AccessToken, string TokenType, DateTimeOffset ExpiraEm,
@@ -33,6 +35,7 @@ public interface IAutenticacaoService
     Task<TokensAuth> RenovarAsync(RenovarEntrada entrada, CancellationToken ct);
     Task SolicitarRedefinicaoAsync(CadastroEntrada entrada, CancellationToken ct);
     Task RedefinirAsync(RedefinirSenhaEntrada entrada, CancellationToken ct);
+    Task SairAsync(Guid usuarioId, Guid sessaoId, SairEntrada entrada, CancellationToken ct);
     Task<bool> ValidarSessaoAsync(Guid usuarioId, Guid sessaoId, string stamp, CancellationToken ct);
 }
 
