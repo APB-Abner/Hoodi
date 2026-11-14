@@ -1,0 +1,5 @@
+# Wokwi no VS Code: compile antes com `pio run -e wokwi` (pasta firmware/).
+[wokwi]
+version = 1
+firmware = "../firmware/.pio/build/wokwi/firmware.bin"
+elf = "../firmware/.pio/build/wokwi/firmware.elf"
