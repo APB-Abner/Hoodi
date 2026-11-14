@@ -1,4 +1,4 @@
-﻿# hoodi — API
+# hoodi — API
 
 Backend em .NET 10. A autenticação, contatos/convites e o registro de tokens Expo estão implementados, incluindo os patches v0.5.2 e v0.5.3 de convites e validação. Grade de risco, pedido de ajuda, rotas e endpoints de compatibilidade de dispositivos continuam pendentes. A atualização da grade para H3 depende do contrato de dados do Nando.
 
@@ -129,11 +129,11 @@ Emissão de convites permite cinco pedidos por minuto por usuário; resgate perm
 
 O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como outros bancos. A autenticação mantém os filtros por identificadores e compara prazos em memória. Os novos convites convertem datas para ticks UTC inteiros, permitindo filtrar expiração diretamente no SQL. Para novas consultas por prazo, especialmente convites e grade, definir antes uma representação UTC traduzível pelo provedor, como ticks inteiros, com sua migration e testes. Não acrescentar `Where(x => x.ExpiraEmUtc < agora)` sem testar no SQLite real.
 
-`Usuario` e `VinculoContato` agora recebem `agoraUtc` explicitamente; o serviço fornece o horário pelo `TimeProvider`. Os campos legados continuam `DateTime` UTC para preservar o esquema existente.
+`Usuario` e `VinculoContato` agora recebem `agoraUtc` explicitamente; o serviço fornece o horário pelo `TimeProvider`. Os campos do domínio agora usam `DateTimeOffset` em UTC. Para `Usuario` e `VinculoContato`, conversores EF mantêm a representação SQLite legada como `DateTime`/`TEXT`, interpretando os valores antigos explicitamente como UTC, sem reescrever os dados.
 
 ## Validação e pendências
 
-Última execução: 76 testes passaram. O modelo EF continua consistente com as migrations, e o validador do contrato passou em modo normal e com `python -O`. Os testes cobrem os módulos e os patches, incluindo normalização dos códigos e os modos HTTP/HTTPS. Evidência local: `artifacts/test-results/review-v0.5.3.trx` (ignorada pelo Git).
+Última execução: 78 testes passaram. O modelo EF continua consistente com as migrations, e o validador do contrato passou em modo normal e com `python -O`. Os testes cobrem os módulos e os patches, incluindo normalização dos códigos e os modos HTTP/HTTPS. Evidência local: `artifacts/test-results/utc-refactor.trx` (ignorada pelo Git).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
@@ -181,3 +181,11 @@ Para a v0.6, fica planejado `POST /v1/auth/sair`, revogando a sessão e desativa
 
 
 
+
+## Fluxo Git
+
+A branch `develop` recebe as alterações e os testes. Após validação, integrar em `main` por fast-forward quando possível e publicar as duas branches. Os commits devem separar mudanças funcionais e manutenção, sem incluir configurações locais, segredos, bancos ou artefatos de build/teste.
+
+Repositório da equipe: https://github.com/APB-Abner/Hoodi. Nunca usar force push para substituir um histórico remoto existente.
+
+A padronização de datas e a compatibilidade com registros existentes estão descritas em [UTC no domínio](docs/utc-timestamps.md).

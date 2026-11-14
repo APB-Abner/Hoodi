@@ -19,6 +19,14 @@ public sealed class HoodiDbContext(DbContextOptions<HoodiDbContext> options) : D
     {
         var utcTicks = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTimeOffset, long>(
             value => value.UtcTicks, value => new DateTimeOffset(value, TimeSpan.Zero));
+        // Keep the existing SQLite TEXT/DateTime provider representation. Legacy timestamps
+        // have no offset suffix and must be interpreted as UTC, never as machine-local time.
+        var legacyUtc = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTimeOffset, DateTime>(
+            value => value.UtcDateTime,
+            value => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)));
+        model.Entity<Usuario>().Property(x => x.CriadoEmUtc).HasConversion(legacyUtc);
+        model.Entity<VinculoContato>().Property(x => x.CriadoEmUtc).HasConversion(legacyUtc);
+        model.Entity<VinculoContato>().Property(x => x.RevogadoEmUtc).HasConversion(legacyUtc);
         model.Entity<ConviteContato>().Property(x => x.CriadoEmUtc).HasConversion(utcTicks);
         model.Entity<ConviteContato>().Property(x => x.ExpiraEmUtc).HasConversion(utcTicks);
         model.Entity<ConviteContato>().Property(x => x.EncerradoEmUtc).HasConversion(utcTicks);

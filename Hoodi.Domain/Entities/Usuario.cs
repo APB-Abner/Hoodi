@@ -8,7 +8,7 @@ public class Usuario
     public string Email { get; private set; } = string.Empty;
     public string SenhaHash { get; private set; } = string.Empty;
     public string SecurityStamp { get; private set; } = string.Empty;
-    public DateTime CriadoEmUtc { get; private set; }
+    public DateTimeOffset CriadoEmUtc { get; private set; }
 
     private Usuario() { }
 
@@ -23,7 +23,7 @@ public class Usuario
         Email = email.Trim().ToLowerInvariant();
         SenhaHash = senhaHash;
         SecurityStamp = Guid.NewGuid().ToString("N");
-        CriadoEmUtc = agoraUtc.UtcDateTime;
+        CriadoEmUtc = agoraUtc.ToUniversalTime();
     }
 
     public void AlterarSenhaHash(string novoHash)

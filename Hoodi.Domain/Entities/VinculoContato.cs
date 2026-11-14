@@ -14,8 +14,8 @@ public class VinculoContato
 
     public StatusVinculo Status { get; private set; }
 
-    public DateTime CriadoEmUtc { get; private set; }
-    public DateTime? RevogadoEmUtc { get; private set; }
+    public DateTimeOffset CriadoEmUtc { get; private set; }
+    public DateTimeOffset? RevogadoEmUtc { get; private set; }
 
     private VinculoContato() { }
 
@@ -39,7 +39,7 @@ public class VinculoContato
         ContatoId = contatoId;
 
         Status = StatusVinculo.Aceito;
-        CriadoEmUtc = agoraUtc.UtcDateTime;
+        CriadoEmUtc = agoraUtc.ToUniversalTime();
     }
 
     
@@ -57,7 +57,7 @@ public class VinculoContato
             return;
 
         Status = StatusVinculo.Revogado;
-        RevogadoEmUtc = agoraUtc.UtcDateTime;
+        RevogadoEmUtc = agoraUtc.ToUniversalTime();
     }
 
 

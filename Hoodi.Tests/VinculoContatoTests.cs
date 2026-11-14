@@ -23,7 +23,7 @@ public class VinculoContatoTests
         Assert.NotEqual(Guid.Empty, vinculo.Id);
         Assert.Equal(titularId, vinculo.TitularId);
         Assert.Equal(contatoId, vinculo.ContatoId);
-        Assert.Equal(Agora.UtcDateTime, vinculo.CriadoEmUtc);
+        Assert.Equal(Agora, vinculo.CriadoEmUtc);
         Assert.Equal(StatusVinculo.Aceito, vinculo.Status);
         Assert.True(vinculo.EstaAtivo());
         Assert.Null(vinculo.RevogadoEmUtc);
@@ -73,7 +73,7 @@ public class VinculoContatoTests
         // Assert
         Assert.Equal(StatusVinculo.Revogado, vinculo.Status);
         Assert.False(vinculo.EstaAtivo());
-        Assert.Equal(Agora.AddMinutes(1).UtcDateTime, vinculo.RevogadoEmUtc);
+        Assert.Equal(Agora.AddMinutes(1), vinculo.RevogadoEmUtc);
     }
 
     [Fact]

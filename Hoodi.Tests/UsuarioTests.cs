@@ -23,7 +23,7 @@ public class UsuarioTests
         Assert.Equal("Mari", usuario.Nome);
         Assert.Equal("mari@email.com", usuario.Email);
         Assert.Equal(senhaHash, usuario.SenhaHash);
-        Assert.Equal(Agora.UtcDateTime, usuario.CriadoEmUtc);
+        Assert.Equal(Agora, usuario.CriadoEmUtc);
         Assert.False(string.IsNullOrWhiteSpace(usuario.SecurityStamp));
     }
 
