@@ -33,7 +33,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document, context, ct) =>
 {
     document.Info.Title = "hoodi API";
-    document.Info.Version = "0.5.3";
+    document.Info.Version = "0.6.0-draft";
     return Task.CompletedTask;
 }));
 builder.Services.AddMemoryCache();
@@ -135,7 +135,7 @@ app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/health", async (HoodiDbContext db, CancellationToken ct) =>
-    await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok", versaoApi = "0.5.3" }) : Results.StatusCode(503));
+    await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok", versaoApi = "0.6.0-draft" }) : Results.StatusCode(503));
 app.Run();
 
 public partial class Program;

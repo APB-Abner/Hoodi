@@ -304,6 +304,53 @@ namespace Hoodi.Infrastructure.Persistence.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("Hoodi.Infrastructure.Risk.SnapshotArtifact", b =>
+                {
+                    b.Property<string>("Version")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("CsvBytes")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<byte[]>("FixtureBytes")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<byte[]>("ManifestBytes")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("PublishedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Version");
+
+                    b.ToTable("SnapshotPublications");
+                });
+
+            modelBuilder.Entity("Hoodi.Infrastructure.Risk.SnapshotHead", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Version");
+
+                    b.ToTable("SnapshotHeads");
+                });
+
             modelBuilder.Entity("Hoodi.Domain.Entities.ConviteContato", b =>
                 {
                     b.HasOne("Hoodi.Domain.Entities.Usuario", null)
@@ -366,6 +413,15 @@ namespace Hoodi.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SessaoId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hoodi.Infrastructure.Risk.SnapshotHead", b =>
+                {
+                    b.HasOne("Hoodi.Infrastructure.Risk.SnapshotArtifact", null)
+                        .WithMany()
+                        .HasForeignKey("Version")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

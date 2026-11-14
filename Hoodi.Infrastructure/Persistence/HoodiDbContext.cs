@@ -1,4 +1,5 @@
-﻿using Hoodi.Domain.Entities;
+﻿using Hoodi.Infrastructure.Risk;
+using Hoodi.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hoodi.Infrastructure.Persistence;
@@ -14,6 +15,8 @@ public sealed class HoodiDbContext(DbContextOptions<HoodiDbContext> options) : D
     public DbSet<ConviteContato> Convites => Set<ConviteContato>();
     public DbSet<VinculoContato> Vinculos => Set<VinculoContato>();
     public DbSet<TokenPush> TokensPush => Set<TokenPush>();
+    public DbSet<SnapshotArtifact> SnapshotPublications => Set<SnapshotArtifact>();
+    public DbSet<SnapshotHead> SnapshotHeads => Set<SnapshotHead>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -27,6 +30,13 @@ public sealed class HoodiDbContext(DbContextOptions<HoodiDbContext> options) : D
         model.Entity<Usuario>().Property(x => x.CriadoEmUtc).HasConversion(legacyUtc);
         model.Entity<VinculoContato>().Property(x => x.CriadoEmUtc).HasConversion(legacyUtc);
         model.Entity<VinculoContato>().Property(x => x.RevogadoEmUtc).HasConversion(legacyUtc);
+        model.Entity<SnapshotArtifact>().HasKey(x => x.Version);
+        model.Entity<SnapshotArtifact>().Property(x => x.Version).HasMaxLength(128);
+        model.Entity<SnapshotArtifact>().Property(x => x.Sha256).HasMaxLength(64).IsRequired();
+        model.Entity<SnapshotArtifact>().Property(x => x.PublishedAtUtc).HasConversion(utcTicks);
+        model.Entity<SnapshotHead>().HasKey(x => x.Id);
+        model.Entity<SnapshotHead>().Property(x => x.Id).ValueGeneratedNever();
+        model.Entity<SnapshotHead>().HasOne<SnapshotArtifact>().WithMany().HasForeignKey(x => x.Version).OnDelete(DeleteBehavior.Restrict);
         model.Entity<ConviteContato>().Property(x => x.CriadoEmUtc).HasConversion(utcTicks);
         model.Entity<ConviteContato>().Property(x => x.ExpiraEmUtc).HasConversion(utcTicks);
         model.Entity<ConviteContato>().Property(x => x.EncerradoEmUtc).HasConversion(utcTicks);

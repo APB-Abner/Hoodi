@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "author": "hoodi",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-aitewinrobot-esp32c3-supermini", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "board-ssd1306", "id": "oled", "top": -12, "left": -190, "attrs": { "i2cAddress": "0x3c" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 60, "left": 130, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "motor", "top": 20, "left": 230, "attrs": { "color": "yellow", "label": "vibracao" } },
+    { "type": "wokwi-pushbutton", "id": "botao", "top": 120, "left": 130, "attrs": { "color": "red", "label": "botao" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "oled:SDA", "esp:6", "green", [] ],
+    [ "oled:SCL", "esp:7", "blue", [] ],
+    [ "oled:VCC", "esp:3V3", "red", [ "v-30", "h260", "v52" ] ],
+    [ "oled:GND", "esp:GND", "black", [ "v-40", "h290", "v52" ] ],
+    [ "esp:3", "r1:1", "orange", [] ],
+    [ "r1:2", "motor:A", "orange", [] ],
+    [ "motor:C", "esp:GND", "black", [] ],
+    [ "esp:4", "botao:1.l", "purple", [] ],
+    [ "botao:2.l", "esp:GND", "black", [] ]
+  ],
+  "dependencies": {}
+}
