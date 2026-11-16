@@ -9,6 +9,7 @@ public sealed class PedidoPanico
     public string Origem { get; set; } = "app";
     public DateTimeOffset RegistradoEm { get; set; }
     public DateTimeOffset? DadosExpiramEm { get; set; }
+    public DateTimeOffset? DadosTitularExpiramEm { get; set; }
     public string? DadosCifrados { get; set; }
 }
 public sealed class DespachoPanico
@@ -30,6 +31,7 @@ public sealed class PanicoOptions
 {
     // Operational default approved for this increment; team can revise the configured policy.
     public int? RetencaoLocalizacaoHoras { get; set; } = 24;
+    public int RetencaoTitularHoras { get; set; } = 72;
     public bool EnvioExpoHabilitado { get; set; }
 }
 internal sealed record DadosPanico(double? Latitude, double? Longitude, string? Observacao);

@@ -58,6 +58,7 @@ builder.Services.AddHttpClient<Hoodi.Infrastructure.Panico.IExpoGateway, Hoodi.I
 builder.Services.AddHostedService<Hoodi.Api.Panico.PanicoWorker>();
 builder.Services.AddOptions<Hoodi.Infrastructure.Panico.PanicoOptions>().Bind(builder.Configuration.GetSection("Panico"))
     .Validate(o => o.RetencaoLocalizacaoHoras is null or >= 1 and <= 720, "Panico:RetencaoLocalizacaoHoras must be 1..720 when configured.")
+    .Validate(o => o.RetencaoTitularHoras is >= 1 and <= 720, "Panico:RetencaoTitularHoras must be 1..720.")
     .ValidateOnStart();
 builder.Services.AddScoped<Hoodi.Application.Contatos.IContatosService, Hoodi.Infrastructure.Contatos.ContatosService>();
 builder.Services.AddScoped<Hoodi.Application.Push.IPushTokensService, Hoodi.Infrastructure.Push.PushTokensService>();

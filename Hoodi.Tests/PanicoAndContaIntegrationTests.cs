@@ -49,7 +49,9 @@ public sealed class PanicoAndContaIntegrationTests
         Assert.Equal(HttpStatusCode.NoContent, (await Delete(alice, new { senha = "synthetic-password-123" })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await alice.GetAsync("/test/session")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync("/test/session")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync($"/v1/panico/{request.PedidoId}")).StatusCode);
+        var history = await bob.GetFromJsonAsync<PanicoDetalhe>($"/v1/panico/{request.PedidoId}");
+        Assert.Equal("Conta excluída", history!.TitularNome); Assert.Null(history.Latitude); Assert.Null(history.Observacao); Assert.False(history.LocalizacaoDisponivel);
+        Assert.Single((await bob.GetFromJsonAsync<PanicoRecebidoResumo[]>("/v1/panico/recebidos"))!);
         using var scope = factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<HoodiDbContext>();
         Assert.False(await db.Usuarios.AnyAsync(x => x.Id == a));
         Assert.Empty(await db.Vinculos.ToListAsync());
@@ -59,7 +61,9 @@ public sealed class PanicoAndContaIntegrationTests
         Assert.False(await db.RefreshTokens.AnyAsync(x => !db.Sessoes.Any(s => s.Id == x.SessaoId)));
         var anonymous = await db.PedidosPanico.SingleAsync();
         Assert.Null(anonymous.TitularId); Assert.Null(anonymous.IdempotencyKey); Assert.Null(anonymous.DadosCifrados);
-        Assert.All(await db.DespachosPanico.ToListAsync(), x => { Assert.Null(x.ContatoId); Assert.Null(x.TokenHash); Assert.Null(x.VinculoId); });
+        Assert.All(await db.DespachosPanico.ToListAsync(), x => { Assert.Equal(b, x.ContatoId); Assert.Null(x.TokenHash); Assert.Null(x.VinculoId); });
+        using var outsider = factory.Client(); await Seed(factory, outsider, "outsider");
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/v1/panico/{request.PedidoId}")).StatusCode);
     }
 
     [Fact]
@@ -157,7 +161,7 @@ public sealed class PanicoAndContaIntegrationTests
     }
 
     [Fact]
-    public async Task Panic_PositionUses24HourDefault_IsEncrypted_ExpiresAndIsPhysicallyPurged()
+    public async Task Panic_OwnerPositionUses72HourDefault_IsEncrypted_ExpiresAndIsPhysicallyPurged()
     {
         using var factory = new AuthFactory(); using var client = factory.Client(); var id = await Seed(factory, client, "alice");
         var input = new { idempotencyKey = Guid.NewGuid(), origem = "app", latitude = -23.5, longitude = -46.6, observacao = "SYNTHETIC_PRIVATE_NOTE" };
@@ -166,7 +170,7 @@ public sealed class PanicoAndContaIntegrationTests
         var detail = await client.GetFromJsonAsync<PanicoDetalhe>($"/v1/panico/{value.PedidoId}"); Assert.True(detail!.LocalizacaoDisponivel);
         using (var scope = factory.Services.CreateScope())
             Assert.DoesNotContain("SYNTHETIC_PRIVATE_NOTE", (await scope.ServiceProvider.GetRequiredService<HoodiDbContext>().PedidosPanico.SingleAsync()).DadosCifrados!);
-        factory.Clock.Advance(TimeSpan.FromHours(24));
+        factory.Clock.Advance(TimeSpan.FromHours(72));
         using (var expired = factory.Services.CreateScope()) detail = await expired.ServiceProvider.GetRequiredService<IPanicoService>().DetalheAsync(id, value.PedidoId, default);
         Assert.False(detail!.LocalizacaoDisponivel); Assert.Null(detail.Observacao);
         using (var replayScope = factory.Services.CreateScope())

@@ -12,7 +12,8 @@ public sealed class PanicoDispatchProcessor(HoodiDbContext db, TimeProvider cloc
     public async Task ProcessAsync(bool sendEnabled, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        await db.PedidosPanico.Where(x => x.DadosExpiramEm <= now && x.DadosCifrados != null)
+        await db.PedidosPanico.Where(x => (x.DadosExpiramEm == null || x.DadosExpiramEm <= now) &&
+            (x.DadosTitularExpiramEm == null || x.DadosTitularExpiramEm <= now) && x.DadosCifrados != null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.DadosCifrados, (string?)null), ct);
         if (!sendEnabled) return;
         // Single-instance SQLite deployment: serialize dispatch with revocation, logout and deletion.
@@ -31,7 +32,8 @@ public sealed class PanicoDispatchProcessor(HoodiDbContext db, TimeProvider cloc
                 x.Ativo && x.ExpoTokenHash == d.TokenHash, ct);
             var authorized = p.TitularId != null && token != null && await db.Vinculos.AnyAsync(v => v.Id == d.VinculoId &&
                 v.TitularId == p.TitularId && v.ContatoId == d.ContatoId && v.Status == StatusVinculo.Aceito, ct);
-            if (!authorized) d.Estado = "cancelado";
+            if (d.Estado == "aceito_expo" && now - p.RegistradoEm >= TimeSpan.FromHours(24)) d.Estado = "sem_recibo";
+            else if (!authorized) d.Estado = "cancelado";
             else if (now - p.RegistradoEm >= TimeSpan.FromHours(24)) d.Estado = "falho";
             else
             {

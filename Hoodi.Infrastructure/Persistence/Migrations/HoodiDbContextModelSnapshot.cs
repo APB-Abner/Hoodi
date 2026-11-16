@@ -324,6 +324,9 @@ namespace Hoodi.Infrastructure.Persistence.Migrations
                     b.Property<long?>("DadosExpiramEm")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("DadosTitularExpiramEm")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("IdempotencyKey")
                         .HasColumnType("TEXT");
 
