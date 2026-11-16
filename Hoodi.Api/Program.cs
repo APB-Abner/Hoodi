@@ -44,9 +44,21 @@ builder.Services.AddSingleton(services => AuthenticationKeys.CreateJwt(
 builder.Services.AddSingleton<IDataProtectionProvider>(services => AuthenticationKeys.CreateDataProtection(
     services.GetRequiredService<IConfiguration>(), builder.Environment));
 builder.Services.AddDbContext<HoodiDbContext>(options => options.UseSqlite(
-    builder.Configuration["Database:ConnectionString"] ?? "Data Source=hoodi.local.db"));
+    builder.Configuration["Database:ConnectionString"] ?? "Data Source=hoodi.local.db").AddInterceptors(new SqlitePrivacyInterceptor()));
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IAutenticacaoService, AutenticacaoService>();
+builder.Services.AddScoped<Hoodi.Application.Conta.IContaService, Hoodi.Infrastructure.Conta.ContaService>();
+builder.Services.AddScoped<Hoodi.Application.Panico.IPanicoService, Hoodi.Infrastructure.Panico.PanicoService>();
+builder.Services.AddScoped<Hoodi.Infrastructure.Panico.PanicoDispatchProcessor>();
+builder.Services.AddHttpClient<Hoodi.Infrastructure.Panico.IExpoGateway, Hoodi.Infrastructure.Panico.ExpoGateway>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.MaxResponseContentBufferSize = 1024 * 1024;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHostedService<Hoodi.Api.Panico.PanicoWorker>();
+builder.Services.AddOptions<Hoodi.Infrastructure.Panico.PanicoOptions>().Bind(builder.Configuration.GetSection("Panico"))
+    .Validate(o => o.RetencaoLocalizacaoHoras is null or >= 1 and <= 720, "Panico:RetencaoLocalizacaoHoras must be 1..720 when configured.")
+    .ValidateOnStart();
 builder.Services.AddScoped<Hoodi.Application.Contatos.IContatosService, Hoodi.Infrastructure.Contatos.ContatosService>();
 builder.Services.AddScoped<Hoodi.Application.Push.IPushTokensService, Hoodi.Infrastructure.Push.PushTokensService>();
 builder.Services.AddOptions<Hoodi.Infrastructure.Contatos.ContatosOptions>()

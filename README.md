@@ -1,6 +1,6 @@
 # hoodi — API
 
-Backend em .NET 10. A autenticação, contatos/convites e o registro de tokens Expo estão implementados, incluindo os patches v0.5.2 e v0.5.3 de convites e validação. Grade de risco, pedido de ajuda, rotas e endpoints de compatibilidade de dispositivos continuam pendentes. A decisão vigente da grade v0.6 é H3 resolução 9 (`h3_cell`), cinco faixas (`0–4`) e níveis de risco `0–3`, conforme o fechamento mais recente do Nando; veja [o contrato do snapshot v1](docs/risk-snapshot-v1-v0.6.md).
+Backend em .NET 10. Autenticação, contatos/convites e registro de tokens Expo estão implementados. O incremento v0.6 acrescenta exclusão de conta e as cinco operações de pânico com JWT de usuário; veja [o contrato e os limites operacionais](docs/panic-account-v0.6.md). Grade de risco, rotas e autenticação de dispositivos continuam pendentes. A decisão vigente da grade v0.6 é H3 resolução 9 (`h3_cell`), cinco faixas (`0–4`) e níveis de risco `0–3`, conforme o fechamento mais recente do Nando; veja [o contrato do snapshot v1](docs/risk-snapshot-v1-v0.6.md).
 
 ## Integrantes
 
@@ -133,7 +133,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 97 testes .NET e 16 testes dos módulos do Pet passaram. O modelo EF continua consistente com as migrations, e o validador do contrato passou em modo normal e com `python -O`. A suíte .NET inclui logout, isolamento de contas/sessões e publicação de snapshots com entradas sintéticas, inclusive rollback após escrita SQL. Evidência local: `artifacts/test-results/v0.6-preparation.trx` (ignorada pelo Git). No Windows restrito, foi necessário desabilitar o destino Event Log apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`); a primeira execução falhou por falta de permissão nesse log.
+Última execução: 118 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/panic-account-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
@@ -183,6 +183,18 @@ A versão em integração é `0.6.0-draft`, com logout e estrutura inicial de pu
 
 
 
+
+
+
+## Exclusão de conta e pânico — incremento v0.6
+
+`DELETE /v1/conta` exige JWT e corpo `{"senha":"..."}`. Uma senha errada retorna 403 `SENHA_INVALIDA`; a correta confirma a exclusão transacional e retorna 204. O verbo permanece provisório até os testes pelo nginx e pelo app. Use somente senha errada e uma conta sintética no [roteiro de teste de transporte](docs/account-delete-transport-test.md).
+
+Pânico implementa registro, status do titular, lista recebida, detalhe e confirmação de abertura. O pedido e sua fila são persistidos antes do 202; replay retorna o mesmo pedido em 200. Posição/observação ficam cifradas, expiram no GET em 24 horas e são removidas pelo worker. O padrão operacional é configurável em `Panico__RetencaoLocalizacaoHoras=24` e permanece sujeito ao alinhamento do time.
+
+O envio externo está desligado por padrão (`Panico__EnvioExpoHabilitado=false`). Para a demo real, habilitar na VM após integrar tokens válidos do app. A fila pendente não confirma envio. O worker distingue aceite Expo, aceite do provedor e abertura no app; nenhum aceite equivale a leitura pela pessoa. A implantação atual exige uma única instância. O [guia operacional](docs/panic-account-v0.6.md) registra retries, privacidade, concorrência e limitações.
+
+O [OpenAPI incremental](contracts/v0.6/demo.openapi.yaml) descreve essas operações e logout; não congela a grade H3 nem substitui o contrato completo v0.5.3. Validação: `python scripts/validate_v06_demo.py` (também com `python -O`). Limites de 5 contatos e 3 por hora aguardam a definição da equipe. VM/nginx e Android/iOS ainda precisam do teste autenticado após a publicação desta versão.
 
 ## Fluxo Git
 

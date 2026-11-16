@@ -17,6 +17,8 @@ public sealed class HoodiDbContext(DbContextOptions<HoodiDbContext> options) : D
     public DbSet<TokenPush> TokensPush => Set<TokenPush>();
     public DbSet<SnapshotArtifact> SnapshotPublications => Set<SnapshotArtifact>();
     public DbSet<SnapshotHead> SnapshotHeads => Set<SnapshotHead>();
+    public DbSet<Hoodi.Infrastructure.Panico.PedidoPanico> PedidosPanico => Set<Hoodi.Infrastructure.Panico.PedidoPanico>();
+    public DbSet<Hoodi.Infrastructure.Panico.DespachoPanico> DespachosPanico => Set<Hoodi.Infrastructure.Panico.DespachoPanico>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -28,6 +30,22 @@ public sealed class HoodiDbContext(DbContextOptions<HoodiDbContext> options) : D
             value => value.UtcDateTime,
             value => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc)));
         model.Entity<Usuario>().Property(x => x.CriadoEmUtc).HasConversion(legacyUtc);
+        model.Entity<Hoodi.Infrastructure.Panico.PedidoPanico>(p =>
+        {
+            p.HasKey(x => x.Id);
+            p.Property(x => x.RegistradoEm).HasConversion(utcTicks);
+            p.Property(x => x.DadosExpiramEm).HasConversion(utcTicks);
+            p.HasIndex(x => new { x.TitularId, x.IdempotencyKey }).IsUnique();
+            p.HasOne<Usuario>().WithMany().HasForeignKey(x => x.TitularId).OnDelete(DeleteBehavior.Restrict);
+        });
+        model.Entity<Hoodi.Infrastructure.Panico.DespachoPanico>(d =>
+        {
+            d.HasKey(x => x.Id);
+            d.Property(x => x.ProximaTentativa).HasConversion(utcTicks);
+            d.Property(x => x.AbertoEm).HasConversion(utcTicks);
+            d.HasOne<Hoodi.Infrastructure.Panico.PedidoPanico>().WithMany().HasForeignKey(x => x.PedidoId).OnDelete(DeleteBehavior.Restrict);
+            d.HasIndex(x => new { x.Estado, x.ProximaTentativa });
+        });
         model.Entity<VinculoContato>().Property(x => x.CriadoEmUtc).HasConversion(legacyUtc);
         model.Entity<VinculoContato>().Property(x => x.RevogadoEmUtc).HasConversion(legacyUtc);
         model.Entity<SnapshotArtifact>().HasKey(x => x.Version);

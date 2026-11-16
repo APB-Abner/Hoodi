@@ -116,7 +116,7 @@ public sealed class AuthIntegrationTests
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HoodiDbContext>();
         Assert.Equal(1, await db.Usuarios.CountAsync());
-        Assert.Equal(3, (await db.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(4, (await db.Database.GetAppliedMigrationsAsync()).Count());
     }
 
     [Fact]

@@ -262,6 +262,89 @@ namespace Hoodi.Infrastructure.Persistence.Migrations
                     b.ToTable("Vinculos");
                 });
 
+            modelBuilder.Entity("Hoodi.Infrastructure.Panico.DespachoPanico", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("AbertoEm")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ContatoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ProximaTentativa")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Tentativas")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TicketId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TokenPushId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("VinculoId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PedidoId");
+
+                    b.HasIndex("Estado", "ProximaTentativa");
+
+                    b.ToTable("DespachosPanico");
+                });
+
+            modelBuilder.Entity("Hoodi.Infrastructure.Panico.PedidoPanico", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClasseCredencial")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DadosCifrados")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("DadosExpiramEm")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("IdempotencyKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RegistradoEm")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("TitularId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TitularId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("PedidosPanico");
+                });
+
             modelBuilder.Entity("Hoodi.Infrastructure.Persistence.EmailPendente", b =>
                 {
                     b.Property<Guid>("Id")
@@ -405,6 +488,23 @@ namespace Hoodi.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TitularId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Hoodi.Infrastructure.Panico.DespachoPanico", b =>
+                {
+                    b.HasOne("Hoodi.Infrastructure.Panico.PedidoPanico", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hoodi.Infrastructure.Panico.PedidoPanico", b =>
+                {
+                    b.HasOne("Hoodi.Domain.Entities.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("TitularId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Hoodi.Infrastructure.Persistence.RefreshRegistro", b =>
