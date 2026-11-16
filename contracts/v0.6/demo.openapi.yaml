@@ -1,0 +1,659 @@
+openapi: 3.1.0
+info:
+  title: hoodi - incremental v0.6 demo contract
+  version: 0.6.0-draft
+  description: Partial account/logout/panic contract. Stable v0.5.3 is preserved.
+    H3 and routes are not frozen by this increment.
+security:
+- bearerAuth: []
+paths:
+  /v1/panico:
+    post:
+      tags:
+      - Panico
+      summary: Registrar intenção de ajuda idempotente
+      operationId: post_v1_panico
+      responses:
+        '202':
+          description: Pedido persistido para processamento assíncrono
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoRegistrado'
+              example:
+                pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                registradoEm: '2026-11-08T14:00:00-03:00'
+                origem: app
+                resumo:
+                  estado: em_processamento
+                  total: 1
+                  pendentes: 1
+                  aceitosExpo: 0
+                  aceitosProvedor: 0
+                  abertosNoApp: 0
+                  falhosOuCancelados: 0
+                reutilizado: false
+        '200':
+          description: Replay idempotente (mesmo pedido original)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoRegistrado'
+        '401':
+          description: Autenticação inválida
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Chave reapresentada por classe de credencial diferente
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroConflitoIdempotencia'
+              example:
+                type: about:blank
+                title: Conflito de idempotência
+                status: 409
+                detail: A chave já foi usada por esta conta com outra classe de credencial.
+                code: IDEMPOTENCIA_CREDENCIAL_DIVERGENTE
+                traceId: trace-sintetico-001
+        '422':
+          description: ORIGEM_CREDENCIAL_INCOMPATIVEL or COORDENADAS_INVALIDAS
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErroPanicoValidacao'
+              example:
+                title: Origem incompatível
+                status: 422
+                code: ORIGEM_CREDENCIAL_INCOMPATIVEL
+                traceId: trace-sintetico-422
+        '400':
+          description: DADOS_INVALIDOS - malformed body, empty key or extra fields
+          content: &id001
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '503':
+          description: RETENCAO_NAO_CONFIGURADA - explicit configuration lacks retention
+            policy; nothing registered
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanicoEntrada'
+            example:
+              idempotencyKey: 3155ad90-86bb-41bc-b634-148091551a4a
+              origem: app
+              latitude: null
+              longitude: null
+              observacao: Pedido de teste, sem emergência real.
+      security:
+      - bearerAuth: []
+      description: 'A chave identifica um pedido por titular. Reenvio da mesma chave
+        com a MESMA CLASSE de credencial autenticada (JWT_usuario ou X-Device-Key_dispositivo)
+        retorna o pedido original independentemente de origem app/watch (ambos usam
+        JWT). Classe de credencial diferente com mesma chave retorna 409, sem duplicar.
+        Latitude, longitude, observacao, horario e origem ficam congelados no primeiro
+        registro. JWT expirado exige renovar pelo refresh token; dispositivo nao usa
+        JWT. Push nao significa recebimento. JWT usuário admite origem app ou watch;
+        X-Device-Key admite somente esp32. Classe/origem incompatível → 422 ORIGEM_CREDENCIAL_INCOMPATIVEL.
+        O cliente gera UUID de idempotência no PRIMEIRO acionamento (incluindo handler
+        da notificação no Watch encaminhada ao iPhone), persiste atomicamente e reutiliza
+        por 120 s para a mesma intenção entre Watch/app; depois gera nova chave. Servidor
+        retém vínculo (titular,chave,classe,identificador do pedido) por pelo menos
+        30 dias; coordenadas/observações seguem políticas de retenção separadas. A
+        API deduplica pela chave, independentemente da hora do replay enquanto a associação
+        existir. Nunca reutilizar chave no cliente após janela.  Replay em 200 inclui
+        reutilizado=true, mesmo pedidoId e registradoEm originais, sem atualizar posição,
+        mas resumo derivado pode refletir somente evolução dos despachos já persistidos.
+        A interface diz "Pedido já registrado às HH:MM; localização original mantida",
+        não afirma que novo toque atualizou GPS. Primeiro 202 inclui reutilizado=false.
+        Replay com chave já existente nunca adiciona destinatários/trabalhos novos,
+        nem muda coordenadas, origem ou instante. Somente fases dos despachos PREEXISTENTES
+        podem evoluir no resumo. Interface mostra “Pedido já registrado às HH:MM”,
+        sem dizer “localização atualizada”. Incremental implementation: user JWT only
+        (app/watch). Device-key authentication is not implemented. Coordinates and
+        observation expire after 24 hours by configurable default; replay never renews
+        that deadline. External Expo dispatch requires explicit operational enablement.'
+      x-contratoPush:
+        $ref: '#/components/schemas/PushPedidoAjuda'
+  /v1/panico/{pedidoId}/status:
+    get:
+      tags:
+      - Panico
+      summary: Resumo derivado dos despachos para titular
+      operationId: get_v1_panico_pedidoId_status
+      responses:
+        '200':
+          description: Resumo sem alegação de entrega
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoStatus'
+              example:
+                pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                registradoEm: '2026-11-08T14:00:00-03:00'
+                resumo:
+                  estado: nenhum_envio_confirmado
+                  total: 1
+                  pendentes: 0
+                  aceitosExpo: 0
+                  aceitosProvedor: 0
+                  abertosNoApp: 0
+                  falhosOuCancelados: 1
+        '404':
+          description: Pedido inexistente ou de outra conta
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          description: Invalid authentication
+          content: *id001
+      parameters:
+      - name: pedidoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+  /v1/panico/recebidos:
+    get:
+      tags:
+      - Panico
+      summary: Listar pedidos recebidos por contato autorizado
+      operationId: get_v1_panico_recebidos
+      responses:
+        '200':
+          description: Lista sem coordenadas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PanicoRecebidoResumo'
+              example:
+              - pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                titularNome: Pessoa Exemplo
+                registradoEm: '2026-11-08T14:00:00-03:00'
+        '401':
+          description: Não autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+      security:
+      - bearerAuth: []
+  /v1/panico/{pedidoId}:
+    get:
+      tags:
+      - Panico
+      summary: Consultar detalhe como titular ou contato aceito
+      operationId: get_v1_panico_pedidoId
+      responses:
+        '200':
+          description: Detalhe autorizado (posição pode ser nula)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanicoDetalhe'
+              example:
+                pedidoId: 96a38750-55dd-4259-8e5c-055504890c00
+                titularNome: Pessoa Exemplo
+                registradoEm: '2026-11-08T14:00:00-03:00'
+                origem: app
+                latitude: null
+                longitude: null
+                observacao: Pedido de teste, sem emergência real.
+                localizacaoDisponivel: false
+        '404':
+          description: Pedido inexistente, revogado ou sem autorização
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          description: Invalid authentication
+          content: *id001
+      parameters:
+      - name: pedidoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      description: Nenhum dado de posição via push. A API revalida aceite vigente
+        e janela de retenção em toda leitura. Acesso de titular à própria posição
+        também é permitido.
+      security:
+      - bearerAuth: []
+  /v1/panico/{pedidoId}/abertura:
+    post:
+      tags:
+      - Panico
+      summary: Confirmar abertura do pedido pelo contato no app
+      operationId: post_v1_panico_pedidoId_abertura
+      responses:
+        '204':
+          description: Abertura gravada (não prova entrega via push)
+        '404':
+          description: Pedido não autorizado
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          description: Invalid authentication
+          content: *id001
+      parameters:
+      - name: pedidoId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      security:
+      - bearerAuth: []
+  /v1/auth/sair:
+    post:
+      operationId: post_v1_auth_sair
+      tags:
+      - Autenticacao
+      security:
+      - bearerAuth: []
+      summary: Revoke current session and deactivate this account's installation push
+      description: User and session are inferred exclusively from the validated JWT
+        sub/sid. In one transaction revoke that refresh family, clear its encrypted
+        replay, and deactivate only the authenticated user's push matching instalacaoId.
+        Other sessions and installations remain unchanged. An installation without
+        a registered push does not prevent logout. An already revoked/expired JWT
+        receives 401, including a retry after successful logout. The caller supplies
+        its installation identifier; the current login contract does not bind that
+        identifier cryptographically to the session. A 401 does not prove push was
+        deactivated. Client clears local credentials after confirmed 204.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - instalacaoId
+              properties:
+                instalacaoId:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Same identifier used when registering this installation's
+                    push; outer spaces are trimmed.
+      responses:
+        '204':
+          description: Current session revoked and matching own push deactivated;
+            no body
+        '400':
+          description: DADOS_INVALIDOS - missing, malformed or extra request fields
+        '401':
+          description: Authentication or current session invalid; no logout side effects
+            guaranteed
+        '429':
+          description: LIMITE_TENTATIVAS - authentication IP limiter exceeded
+  /v1/conta:
+    delete:
+      tags:
+      - Conta
+      operationId: delete_v1_conta
+      summary: Delete own account after password confirmation
+      security:
+      - bearerAuth: []
+      description: Provisional verb pending real nginx and Expo Android/iOS transport
+        tests. One transaction deletes the account, sessions, refresh tokens, invitations,
+        links in either direction, push and matching authentication outbox messages;
+        panic records lose account/recipient identifiers and sensitive data. Other
+        accounts remain. Identity comes only from the validated JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - senha
+              properties:
+                senha:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+      responses:
+        '204':
+          description: Account deleted; no response body
+        '400':
+          description: DADOS_INVALIDOS - password required or invalid body
+          content: *id001
+        '401':
+          description: Invalid session
+          content: *id001
+        '403':
+          description: SENHA_INVALIDA - password received and verified; no deletion
+          content: *id001
+        '429':
+          description: LIMITE_TENTATIVAS
+          content: *id001
+        '500':
+          description: ERRO_INTERNO - operation not confirmed
+          content: *id001
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Erro:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    ErroConflitoIdempotencia:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 409
+        detail:
+          type: string
+        code:
+          type: string
+          const: IDEMPOTENCIA_CREDENCIAL_DIVERGENTE
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    ErroPanicoValidacao:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          const: 422
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+          - ORIGEM_CREDENCIAL_INCOMPATIVEL
+          - COORDENADAS_INCOMPLETAS
+          - PAYLOAD_INVALIDO
+          - COORDENADAS_INVALIDAS
+        traceId:
+          type: string
+      additionalProperties: false
+      required:
+      - title
+      - status
+      - code
+      - traceId
+      description: Erro no formato Problem Details; não expõe PII.
+    PanicoDetalhe:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        titularNome:
+          type: string
+        registradoEm:
+          type: string
+          format: date-time
+        origem:
+          type: string
+          enum:
+          - app
+          - watch
+          - esp32
+        latitude:
+          type:
+          - number
+          - 'null'
+        longitude:
+          type:
+          - number
+          - 'null'
+        observacao:
+          type:
+          - string
+          - 'null'
+        localizacaoDisponivel:
+          type: boolean
+      additionalProperties: false
+      required:
+      - pedidoId
+      - titularNome
+      - registradoEm
+      - origem
+      - latitude
+      - longitude
+      - observacao
+      - localizacaoDisponivel
+    PanicoEntrada:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          format: uuid
+        origem:
+          type: string
+          enum:
+          - app
+          - watch
+          - esp32
+          description: Origem informativa (app/watch/esp32). Origem nao e prova do
+            relogio e nao entra na comparacao idempotente.
+        latitude:
+          type:
+          - number
+          - 'null'
+          minimum: -90
+          maximum: 90
+        longitude:
+          type:
+          - number
+          - 'null'
+          minimum: -180
+          maximum: 180
+        observacao:
+          type:
+          - string
+          - 'null'
+          maxLength: 300
+      additionalProperties: false
+      required:
+      - idempotencyKey
+      - origem
+      description: As coordenadas devem ser ambas numéricas, ambas null, ou ambas
+        omitidas. Nunca uma preenchida e a outra ausente/null. Origem é informativa,
+        mas é validada por classe de credencial.
+      allOf:
+      - oneOf:
+        - properties:
+            latitude:
+              type: number
+              minimum: -90
+              maximum: 90
+            longitude:
+              type: number
+              minimum: -180
+              maximum: 180
+          required:
+          - latitude
+          - longitude
+        - properties:
+            latitude:
+              type: 'null'
+            longitude:
+              type: 'null'
+          required:
+          - latitude
+          - longitude
+        - not:
+            anyOf:
+            - required:
+              - latitude
+            - required:
+              - longitude
+    PanicoRecebidoResumo:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        titularNome:
+          type: string
+        registradoEm:
+          type: string
+          format: date-time
+      additionalProperties: false
+      required:
+      - pedidoId
+      - titularNome
+      - registradoEm
+    PanicoRegistrado:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        registradoEm:
+          type: string
+          format: date-time
+        origem:
+          type: string
+          enum:
+          - app
+          - watch
+          - esp32
+        resumo:
+          $ref: '#/components/schemas/ResumoDespachos'
+        reutilizado:
+          type: boolean
+          description: False se primeiro 202; true se replay 200 da mesma intenção.
+            Mostra pedido anterior ao cliente, não confirma entrega do aviso.
+      additionalProperties: false
+      required:
+      - pedidoId
+      - registradoEm
+      - origem
+      - resumo
+      - reutilizado
+    PanicoStatus:
+      type: object
+      properties:
+        pedidoId:
+          type: string
+          format: uuid
+        registradoEm:
+          type: string
+          format: date-time
+        resumo:
+          $ref: '#/components/schemas/ResumoDespachos'
+      additionalProperties: false
+      required:
+      - pedidoId
+      - registradoEm
+      - resumo
+    PushPedidoAjuda:
+      type: object
+      properties:
+        tipo:
+          type: string
+          const: pedido_ajuda
+        pedidoId:
+          type: string
+          format: uuid
+      additionalProperties: false
+      required:
+      - tipo
+      - pedidoId
+      description: Somente estes dois campos no data payload de push; nunca incluir
+        nome, posicao, observacao, JWT ou token de dispositivo. Notificacao visivel
+        com texto generico.
+    ResumoDespachos:
+      type: object
+      properties:
+        estado:
+          type: string
+          enum:
+          - sem_destinatarios
+          - em_processamento
+          - aceito_expo
+          - aceito_provedor_push
+          - aberto_no_app
+          - nenhum_envio_confirmado
+        total:
+          type: integer
+          minimum: 0
+        pendentes:
+          type: integer
+          minimum: 0
+        aceitosExpo:
+          type: integer
+          minimum: 0
+        aceitosProvedor:
+          type: integer
+          minimum: 0
+        abertosNoApp:
+          type: integer
+          minimum: 0
+        falhosOuCancelados:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+      required:
+      - estado
+      - total
+      - pendentes
+      - aceitosExpo
+      - aceitosProvedor
+      - abertosNoApp
+      - falhosOuCancelados
