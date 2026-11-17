@@ -12,6 +12,37 @@ namespace Hoodi.Tests;
 
 public sealed class PanicReviewRegressionTests
 {
+    [Fact]
+    public async Task OwnerDeletion_MustNotRestoreRevokedRecipientsAccess()
+    {
+        using var factory = new AuthFactory();
+        using var owner = factory.Client(); using var revoked = factory.Client(); using var active = factory.Client();
+        var a = await PanicoAndContaIntegrationTests.Seed(factory, owner, "owner");
+        var b = await PanicoAndContaIntegrationTests.Seed(factory, revoked, "revoked");
+        var c = await PanicoAndContaIntegrationTests.Seed(factory, active, "active");
+        var revokedLink = await PanicoAndContaIntegrationTests.Link(factory, a, b);
+        await PanicoAndContaIntegrationTests.Link(factory, a, c);
+        var request = await PanicoAndContaIntegrationTests.Create(owner, Guid.NewGuid());
+        var detailUrl = $"/v1/panico/{request.PedidoId}";
+        Assert.Equal(HttpStatusCode.OK, (await revoked.GetAsync(detailUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/v1/contatos/{revokedLink}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await revoked.GetAsync(detailUrl)).StatusCode);
+        Assert.Empty((await revoked.GetFromJsonAsync<PanicoRecebidoResumo[]>("/v1/panico/recebidos"))!);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Delete(owner)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await revoked.GetAsync(detailUrl)).StatusCode);
+        Assert.Empty((await revoked.GetFromJsonAsync<PanicoRecebidoResumo[]>("/v1/panico/recebidos"))!);
+        Assert.Equal(HttpStatusCode.NotFound, (await revoked.PostAsync(detailUrl + "/abertura", null)).StatusCode);
+        var history = (await active.GetFromJsonAsync<PanicoDetalhe>(detailUrl))!;
+        Assert.Equal("Conta excluída", history.TitularNome);
+        Assert.Null(history.Latitude); Assert.Null(history.Longitude); Assert.Null(history.Observacao);
+        Assert.False(history.LocalizacaoDisponivel);
+        var received = Assert.Single((await active.GetFromJsonAsync<PanicoRecebidoResumo[]>("/v1/panico/recebidos"))!);
+        Assert.Equal(request.PedidoId, received.PedidoId); Assert.Equal("Conta excluída", received.TitularNome);
+        Assert.Equal(HttpStatusCode.NoContent, (await active.PostAsync(detailUrl + "/abertura", null)).StatusCode);
+    }
+
     [Theory]
     [InlineData(24, 72)]
     [InlineData(72, 48)]

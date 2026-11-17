@@ -39,6 +39,11 @@ public sealed class ContaService(HoodiDbContext db, IPasswordHasher<Usuario> pas
             }
         }
         var ownRequests = db.PedidosPanico.Where(x => x.TitularId == usuarioId).Select(x => x.Id);
+        // Preserve anonymous history only for recipients whose original consent is still active.
+        await db.DespachosPanico.Where(d => ownRequests.Contains(d.PedidoId) &&
+            !db.Vinculos.Any(v => v.Id == d.VinculoId && v.TitularId == usuarioId &&
+                v.ContatoId == d.ContatoId && v.Status == Hoodi.Domain.Enums.StatusVinculo.Aceito))
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ContatoId, (Guid?)null), ct);
         await db.DespachosPanico.Where(x => x.ContatoId == usuarioId)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.ContatoId, (Guid?)null).SetProperty(x => x.VinculoId, (Guid?)null)
                 .SetProperty(x => x.TokenPushId, (Guid?)null).SetProperty(x => x.TokenHash, (string?)null)
