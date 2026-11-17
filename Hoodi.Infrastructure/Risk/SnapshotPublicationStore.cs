@@ -42,6 +42,12 @@ public sealed class SnapshotPublicationStore(HoodiDbContext db, TimeProvider clo
         }
     }
 
+    public Task<SnapshotDescriptor?> ReadCurrentDescriptorAsync(CancellationToken ct) =>
+        (from head in db.SnapshotHeads.AsNoTracking()
+         where head.Id == 1
+         join snapshot in db.SnapshotPublications.AsNoTracking() on head.Version equals snapshot.Version
+         select new SnapshotDescriptor(snapshot.Version, snapshot.Sha256, snapshot.PublishedAtUtc)).SingleOrDefaultAsync(ct);
+
     public async Task<PublishedSnapshot?> ReadCurrentAsync(CancellationToken ct)
     {
         var record = await (from head in db.SnapshotHeads.AsNoTracking()

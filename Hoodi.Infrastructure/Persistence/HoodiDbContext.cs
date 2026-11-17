@@ -35,6 +35,7 @@ public sealed class HoodiDbContext(DbContextOptions<HoodiDbContext> options) : D
             p.HasKey(x => x.Id);
             p.Property(x => x.RegistradoEm).HasConversion(utcTicks);
             p.Property(x => x.DadosExpiramEm).HasConversion(utcTicks);
+            p.Property(x => x.DadosTitularExpiramEm).HasConversion(utcTicks);
             p.HasIndex(x => new { x.TitularId, x.IdempotencyKey }).IsUnique();
             p.HasOne<Usuario>().WithMany().HasForeignKey(x => x.TitularId).OnDelete(DeleteBehavior.Restrict);
         });

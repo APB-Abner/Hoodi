@@ -120,8 +120,11 @@ paths:
         podem evoluir no resumo. Interface mostra “Pedido já registrado às HH:MM”,
         sem dizer “localização atualizada”. Incremental implementation: user JWT only
         (app/watch). Device-key authentication is not implemented. Coordinates and
-        observation expire after 24 hours by configurable default; replay never renews
-        that deadline. External Expo dispatch requires explicit operational enablement.'
+        observation use role-specific configurable retention; replay never renews
+        that deadline. External Expo dispatch requires explicit operational enablement.
+        Retention deadlines are frozen at creation: contacts default to 24 hours (Panico__RetencaoLocalizacaoHoras),
+        owner to 72 hours (Panico__RetencaoTitularHoras). Reads enforce their role
+        deadline and cleanup waits for both.'
       x-contratoPush:
         $ref: '#/components/schemas/PushPedidoAjuda'
   /v1/panico/{pedidoId}/status:
@@ -316,10 +319,12 @@ paths:
       security:
       - bearerAuth: []
       description: Provisional verb pending real nginx and Expo Android/iOS transport
-        tests. One transaction deletes the account, sessions, refresh tokens, invitations,
-        links in either direction, push and matching authentication outbox messages;
-        panic records lose account/recipient identifiers and sensitive data. Other
-        accounts remain. Identity comes only from the validated JWT.
+        tests. Password confirmation is mandatory in the JSON body. One transaction
+        removes the account and authentication/link/push data. Own panic records lose
+        owner identity, idempotency keys and sensitive data; original recipients retain
+        anonymous history as Conta excluida with no position or observation. Deleting
+        a recipient removes that recipient ID and history access. Unreadable queued
+        email is preserved for recovery without blocking deletion.
       requestBody:
         required: true
         content:
@@ -476,6 +481,10 @@ components:
       - longitude
       - observacao
       - localizacaoDisponivel
+      description: Live-owner access requires original accepted consent. After owner
+        deletion, only original recipients retain anonymous detail, with titularNome
+        Conta excluida, null position/observation and localizacaoDisponivel=false.
+        Live owner and contacts use separate stored retention deadlines.
     PanicoEntrada:
       type: object
       properties:
@@ -657,3 +666,6 @@ components:
       - aceitosProvedor
       - abertosNoApp
       - falhosOuCancelados
+      description: Expo acceptance is preserved when no receipt arrives within 24
+        hours; internal sem_recibo stops polling but counts as aceitosExpo, never
+        as a failed or provider-confirmed dispatch.

@@ -47,6 +47,16 @@ builder.Services.AddDbContext<HoodiDbContext>(options => options.UseSqlite(
     builder.Configuration["Database:ConnectionString"] ?? "Data Source=hoodi.local.db").AddInterceptors(new SqlitePrivacyInterceptor()));
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IAutenticacaoService, AutenticacaoService>();
+builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.H3SpatialIndex>();
+builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.SnapshotCellCache>();
+builder.Services.AddSingleton<Hoodi.Application.Risk.IH3CellValidator>(s => s.GetRequiredService<Hoodi.Infrastructure.Risk.H3SpatialIndex>());
+builder.Services.AddScoped<Hoodi.Application.Risk.IProducerSnapshotDecoder, Hoodi.Infrastructure.Risk.ProducerV2Decoder>();
+builder.Services.AddScoped<Hoodi.Application.Risk.ISnapshotPublicationStore, Hoodi.Infrastructure.Risk.SnapshotPublicationStore>();
+builder.Services.AddScoped<Hoodi.Application.Risk.SnapshotImportService>();
+builder.Services.AddOptions<Hoodi.Infrastructure.Risk.RiskSnapshotOptions>().Bind(builder.Configuration.GetSection("Risk"))
+    .Validate(o => new[] { o.ApprovedCsvSha256, o.ApprovedManifestSha256, o.ApprovedFixtureSha256 }.All(x =>
+        x is not null && System.Text.RegularExpressions.Regex.IsMatch(x, "\\A[0-9a-f]{64}\\z")), "Risk approved hashes must be lowercase SHA-256 values.")
+    .ValidateOnStart();
 builder.Services.AddScoped<Hoodi.Application.Conta.IContaService, Hoodi.Infrastructure.Conta.ContaService>();
 builder.Services.AddScoped<Hoodi.Application.Panico.IPanicoService, Hoodi.Infrastructure.Panico.PanicoService>();
 builder.Services.AddScoped<Hoodi.Infrastructure.Panico.PanicoDispatchProcessor>();
@@ -58,6 +68,7 @@ builder.Services.AddHttpClient<Hoodi.Infrastructure.Panico.IExpoGateway, Hoodi.I
 builder.Services.AddHostedService<Hoodi.Api.Panico.PanicoWorker>();
 builder.Services.AddOptions<Hoodi.Infrastructure.Panico.PanicoOptions>().Bind(builder.Configuration.GetSection("Panico"))
     .Validate(o => o.RetencaoLocalizacaoHoras is null or >= 1 and <= 720, "Panico:RetencaoLocalizacaoHoras must be 1..720 when configured.")
+    .Validate(o => o.RetencaoTitularHoras is >= 1 and <= 720, "Panico:RetencaoTitularHoras must be 1..720.")
     .ValidateOnStart();
 builder.Services.AddScoped<Hoodi.Application.Contatos.IContatosService, Hoodi.Infrastructure.Contatos.ContatosService>();
 builder.Services.AddScoped<Hoodi.Application.Push.IPushTokensService, Hoodi.Infrastructure.Push.PushTokensService>();
@@ -105,6 +116,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddHttpsRedirection(options => options.HttpsPort = builder.Configuration.GetValue("Https:Port", 443));
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy("risco-publico", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("convites-emitir", context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

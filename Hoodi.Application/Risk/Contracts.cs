@@ -6,6 +6,7 @@ public sealed record RiskCell(string H3Cell, int Band, string Status, int? Level
 public sealed record DecodedSnapshot(IReadOnlyList<RiskCell> Cells, IReadOnlySet<string> ExpectedCoverage);
 public sealed record PublishedSnapshot(string Version, string Sha256, DateTimeOffset PublishedAtUtc, byte[] CsvBytes, byte[] ManifestBytes, byte[] FixtureBytes);
 public sealed record PublicationResult(string Version, string Sha256, DateTimeOffset PublishedAtUtc, bool AlreadyPublished);
+public sealed record SnapshotDescriptor(string Version, string Sha256, DateTimeOffset PublishedAtUtc);
 
 public interface IProducerSnapshotDecoder
 {
@@ -22,6 +23,7 @@ public interface ISnapshotPublicationStore
 {
     Task<PublicationResult> PublishAsync(SnapshotPackage package, string sha256, CancellationToken ct);
     Task<PublishedSnapshot?> ReadCurrentAsync(CancellationToken ct);
+    Task<SnapshotDescriptor?> ReadCurrentDescriptorAsync(CancellationToken ct);
 }
 public sealed class SnapshotValidationException(string code) : Exception("Snapshot validation failed.")
 {

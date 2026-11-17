@@ -264,7 +264,7 @@ public sealed class ContactsAndPushIntegrationTests
         Assert.Equal("SYNTHETIC_HASH", (await db.Usuarios.SingleAsync()).SenhaHash);
         Assert.Empty(await db.Convites.ToListAsync());
         Assert.Empty(await db.TokensPush.ToListAsync());
-        Assert.Equal(4, (await db.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(5, (await db.Database.GetAppliedMigrationsAsync()).Count());
     }
     [Theory]
     [InlineData("aceitar")]

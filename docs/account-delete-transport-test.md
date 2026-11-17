@@ -28,3 +28,7 @@ Record separate evidence for nginx on the VM, Expo Android and Expo iOS (if avai
 No successful account deletion is needed for this transport test. If a supported real path cannot carry the body reliably, change the incremental contract/client/server together to `POST /v1/conta/exclusao`. Do not silently expose two destructive operations or claim the transport test passed from a local integration test.
 
 Current evidence: local ASP.NET integration path only; VM/nginx and native app paths remain unverified.
+
+## Mobile integration note for Mariana
+
+The confirmation screen needs a password input. JWT-only deletion is insufficient: send `{ "senha": enteredPassword }` in the authenticated DELETE body, without logging or persisting the password. Keep the screen/session on 400/403 and clear local credentials only after confirmed 204. The full Expo application is not present in this repository, so this note does not establish that its screen or request has been updated. Android/nginx transport remains pending.

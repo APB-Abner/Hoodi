@@ -1,0 +1,4 @@
+# Producer hashes cover exact bytes; never rewrite newlines on checkout.
+*.csv -text
+*.json -text
+*.sha256 -text

@@ -1,6 +1,6 @@
 # hoodi — API
 
-Backend em .NET 10. Autenticação, contatos/convites e registro de tokens Expo estão implementados. O incremento v0.6 acrescenta exclusão de conta e as cinco operações de pânico com JWT de usuário; veja [o contrato e os limites operacionais](docs/panic-account-v0.6.md). Grade de risco, rotas e autenticação de dispositivos continuam pendentes. A decisão vigente da grade v0.6 é H3 resolução 9 (`h3_cell`), cinco faixas (`0–4`) e níveis de risco `0–3`, conforme o fechamento mais recente do Nando; veja [o contrato do snapshot v1](docs/risk-snapshot-v1-v0.6.md).
+Backend em .NET 10. Autenticação, contatos/convites, tokens Expo, exclusão de conta e pânico estão implementados. A grade H3 agora tem importação protegida, publicação atômica e leitura pública do pacote real v2; veja [a integração da grade](docs/risk-snapshot-v2-integration.md) e [os limites do pânico](docs/panic-account-v0.6.md). Rotas e autenticação de dispositivos continuam pendentes. A grade usa H3 resolução 9, cinco faixas (`0–4`) e níveis (`0–3`), com supressão de contagens abaixo de 3.
 
 ## Integrantes
 
@@ -133,7 +133,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 118 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/panic-account-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
+Última execução: 139 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/risk-cache-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
@@ -190,11 +190,25 @@ A versão em integração é `0.6.0-draft`, com logout e estrutura inicial de pu
 
 `DELETE /v1/conta` exige JWT e corpo `{"senha":"..."}`. Uma senha errada retorna 403 `SENHA_INVALIDA`; a correta confirma a exclusão transacional e retorna 204. O verbo permanece provisório até os testes pelo nginx e pelo app. Use somente senha errada e uma conta sintética no [roteiro de teste de transporte](docs/account-delete-transport-test.md).
 
-Pânico implementa registro, status do titular, lista recebida, detalhe e confirmação de abertura. O pedido e sua fila são persistidos antes do 202; replay retorna o mesmo pedido em 200. Posição/observação ficam cifradas, expiram no GET em 24 horas e são removidas pelo worker. O padrão operacional é configurável em `Panico__RetencaoLocalizacaoHoras=24` e permanece sujeito ao alinhamento do time.
+Pânico implementa registro, status do titular, lista recebida, detalhe e confirmação de abertura. O pedido e sua fila são persistidos antes do 202; replay retorna o mesmo pedido em 200. Posição/observação ficam cifradas, expiram no GET por papel e são removidas quando ambos os prazos vencem: `Panico__RetencaoLocalizacaoHoras=24` para contatos e `Panico__RetencaoTitularHoras=72` para o titular. Após excluir o titular, os destinatários originais mantêm o histórico “Conta excluída”, sem posição ou observação.
 
 O envio externo está desligado por padrão (`Panico__EnvioExpoHabilitado=false`). Para a demo real, habilitar na VM após integrar tokens válidos do app. A fila pendente não confirma envio. O worker distingue aceite Expo, aceite do provedor e abertura no app; nenhum aceite equivale a leitura pela pessoa. A implantação atual exige uma única instância. O [guia operacional](docs/panic-account-v0.6.md) registra retries, privacidade, concorrência e limitações.
 
-O [OpenAPI incremental](contracts/v0.6/demo.openapi.yaml) descreve essas operações e logout; não congela a grade H3 nem substitui o contrato completo v0.5.3. Validação: `python scripts/validate_v06_demo.py` (também com `python -O`). Limites de 5 contatos e 3 por hora aguardam a definição da equipe. VM/nginx e Android/iOS ainda precisam do teste autenticado após a publicação desta versão.
+O [OpenAPI incremental](contracts/v0.6/demo.openapi.yaml) descreve essas operações e logout; não congela a grade H3 nem substitui o contrato completo v0.5.3. Validação: `python scripts/validate_v06_demo.py` (também com `python -O`). O limite de 5 conta aceitos + pendentes, com sentido ainda a confirmar. O app limita pedidos de ajuda a 3/h; a política correspondente no backend segue em discussão. A confirmação de exclusão no app precisa de campo de senha; veja [o recado de integração](docs/account-delete-transport-test.md). VM/nginx e Android/iOS ainda precisam do teste autenticado.
+
+
+
+## Grade H3 — pacote real v2
+
+A API valida o pacote de `data/risk/v2` e publica o snapshot atomicamente. `com_dado` exige pelo menos 3 registros; contagens 0–2 são publicadas como `sem_dado`, sem nível/pontuação e com contagem zero. `fora_cobertura` permanece separado. O centro informado pelo produtor ainda é provisório.
+
+As leituras públicas são `GET /v1/risco/versao-atual`, `GET /v1/risco/grade` (CSV completo) e `GET /v1/risco/celulas/{h3Cell}?faixa=0`. Antes da primeira importação, retornam 404 `SNAPSHOT_INDISPONIVEL`.
+
+As três leituras compartilham limite de 120 pedidos/minuto por IP (429 no excesso). A consulta de célula usa um índice em memória da publicação atual: após carregar, lê só o descritor da versão no SQLite e busca a linha diretamente. A importação de outra versão invalida o índice automaticamente; chamadas simultâneas compartilham a validação.
+
+`POST /v1/admin/risco/importar` exige JWT válido e conta autorizada em `Risk__ImporterUserIds__0`; a lista padrão é vazia. A importação verifica os hashes aprovados de CSV, manifesto e fixture. Primeiro sucesso retorna 201; repetição idêntica retorna 200. Uma falha preserva a publicação anterior. O início da API não publica automaticamente o pacote.
+
+O app precisa adotar o [contrato incremental H3](contracts/v0.6/risk.openapi.yaml), que substitui o antigo desenho de geohash/JSON paginado por CSV histórico completo. Veja [o procedimento de importação e consumo](docs/risk-snapshot-v2-integration.md). Validação dos artefatos e contrato: `python scripts/validate_risk_v2.py` (também com `python -O`). O produtor, commit e hashes estão em [SOURCE.md](data/risk/v2/SOURCE.md).
 
 ## Fluxo Git
 
