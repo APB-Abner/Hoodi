@@ -12,6 +12,10 @@ Set these environment variables on the API process and restart:
 
 On the VM, add the key privately to the existing systemd EnvironmentFile (root-owned, permission 600). Locally use a private process environment. Never send the key in chat, a PR, a query string or app source. The mobile app calls Hoodi using its own JWT; it must not receive the provider key.
 
+For local development, `.env` at the repository root is ignored by Git. Set the three `Rotas__...` variables there. ASP.NET does not load dotenv automatically: run `./scripts/Start-LocalApi.ps1` to import only those allowed names into the process and start Development. `./scripts/Test-Heigit.ps1` performs a live provider smoke test with fixed public synthetic coordinates and reports only status/count, never credentials or geometry. It does not prove full JWT/grade/mobile integration. The loader parses strings and never evaluates dotenv content as shell code.
+
+Live smoke test on 2026-11-17 returned HTTP 200 with one valid walking route. The private local key was not committed or exposed in tool output. PowerShell's binary `application/geo+json` response is explicitly decoded as UTF-8 by the smoke test.
+
 The fixed provider URL is `https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson`. Requests send `[longitude, latitude]`, the key only in the Authorization header, no instructions and up to three walking alternatives. See the [official migration notice](https://ask.openrouteservice.org/t/deprecating-api-openrouteservice-org-in-favour-of-api-heigit-org/7912/) and [GeoJSON response documentation](https://giscience.github.io/openrouteservice/api-reference/endpoints/directions/requests-and-return-types). Redirects and HTTP client logging are disabled. Timeout: 15 seconds; response cap: 2 MiB. No key means no outbound request and a provider-unavailable comparison result, not fake routes.
 
 ## Step 2: slicing
