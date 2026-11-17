@@ -24,6 +24,7 @@ paths:
                   publicadoEm: {type: string, format: date-time}
                   manifest: {type: object}
         '404': {$ref: '#/components/responses/Unavailable'}
+        '429': {description: 'LIMITE_TENTATIVAS - 120 public risk reads per minute per client IP, no queue'}
   /v1/risco/grade:
     get:
       operationId: get_v1_risco_grade
@@ -47,9 +48,14 @@ paths:
               schema: {type: string}
         '304': {description: Current quoted SHA matches If-None-Match}
         '404': {$ref: '#/components/responses/Unavailable'}
+        '429': {description: 'LIMITE_TENTATIVAS - 120 public risk reads per minute per client IP, no queue'}
   /v1/risco/celulas/{h3Cell}:
     get:
       operationId: get_v1_risco_celula
+      description: >-
+        Current immutable cell index cached by SHA, version and publication time.
+        Warm lookups read only the small SQLite descriptor. Concurrent misses share
+        one decode. Failed refresh never serves the previous version as current.
       security: []
       parameters:
       - name: h3Cell
@@ -99,6 +105,7 @@ paths:
                       nRegistros: {type: 'null'}
         '400': {description: Invalid cell/band; actual H3 validity and resolution are checked beyond regex}
         '404': {$ref: '#/components/responses/Unavailable'}
+        '429': {description: 'LIMITE_TENTATIVAS - 120 public risk reads per minute per client IP, no queue'}
   /v1/admin/risco/importar:
     post:
       operationId: post_v1_admin_risco_importar

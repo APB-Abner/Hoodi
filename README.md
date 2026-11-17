@@ -133,7 +133,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 134 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/risk-v2-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
+Última execução: 139 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/risk-cache-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
@@ -203,6 +203,8 @@ O [OpenAPI incremental](contracts/v0.6/demo.openapi.yaml) descreve essas operaç
 A API valida o pacote de `data/risk/v2` e publica o snapshot atomicamente. `com_dado` exige pelo menos 3 registros; contagens 0–2 são publicadas como `sem_dado`, sem nível/pontuação e com contagem zero. `fora_cobertura` permanece separado. O centro informado pelo produtor ainda é provisório.
 
 As leituras públicas são `GET /v1/risco/versao-atual`, `GET /v1/risco/grade` (CSV completo) e `GET /v1/risco/celulas/{h3Cell}?faixa=0`. Antes da primeira importação, retornam 404 `SNAPSHOT_INDISPONIVEL`.
+
+As três leituras compartilham limite de 120 pedidos/minuto por IP (429 no excesso). A consulta de célula usa um índice em memória da publicação atual: após carregar, lê só o descritor da versão no SQLite e busca a linha diretamente. A importação de outra versão invalida o índice automaticamente; chamadas simultâneas compartilham a validação.
 
 `POST /v1/admin/risco/importar` exige JWT válido e conta autorizada em `Risk__ImporterUserIds__0`; a lista padrão é vazia. A importação verifica os hashes aprovados de CSV, manifesto e fixture. Primeiro sucesso retorna 201; repetição idêntica retorna 200. Uma falha preserva a publicação anterior. O início da API não publica automaticamente o pacote.
 

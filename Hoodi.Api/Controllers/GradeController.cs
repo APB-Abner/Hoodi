@@ -8,12 +8,15 @@ using Hoodi.Infrastructure.Risk;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Hoodi.Api.Controllers;
 
 [ApiController, AllowAnonymous, Route("v1/risco")]
+[EnableRateLimiting("risco-publico")]
 [ProducesResponseType<ProblemDetails>(404)]
-public sealed class GradeController(ISnapshotPublicationStore store, IProducerSnapshotDecoder decoder, IH3CellValidator h3) : ControllerBase
+[ProducesResponseType<ProblemDetails>(429)]
+public sealed class GradeController(ISnapshotPublicationStore store, IProducerSnapshotDecoder decoder, IH3CellValidator h3, SnapshotCellCache cache) : ControllerBase
 {
     [HttpGet("versao-atual")]
     [ProducesResponseType<GradeMetadata>(200)]
@@ -39,10 +42,9 @@ public sealed class GradeController(ISnapshotPublicationStore store, IProducerSn
     public async Task<ActionResult<GradeCell>> Cell(string h3Cell, [FromQuery, Microsoft.AspNetCore.Mvc.ModelBinding.BindRequired, Range(0, 4)] int faixa, CancellationToken ct)
     {
         if (!h3.IsValidResolution9(h3Cell) || h3Cell.Any(char.IsUpper)) throw new RequestException("H3_INVALIDO", 400);
-        var s = await Current(ct);
-        var decoded = await decoder.DecodeAsync(new(s.Version, s.Sha256, s.CsvBytes, s.ManifestBytes, s.FixtureBytes), ct);
-        var row = decoded.Cells.SingleOrDefault(x => x.H3Cell == h3Cell && x.Band == faixa);
-        return Ok(new GradeCell(s.Version, s.Sha256, h3Cell, faixa, row?.Status ?? "fora_cobertura", row?.Level, row?.MonthlyScore, row?.RecordCount));
+        var lookup = await cache.LookupAsync(store, decoder, h3Cell, faixa, ct) ?? throw new RequestException("SNAPSHOT_INDISPONIVEL", 404);
+        var row = lookup.Row;
+        return Ok(new GradeCell(lookup.Publication.Version, lookup.Publication.Sha256, h3Cell, faixa, row?.Status ?? "fora_cobertura", row?.Level, row?.MonthlyScore, row?.RecordCount));
     }
     private async Task<PublishedSnapshot> Current(CancellationToken ct) => await store.ReadCurrentAsync(ct) ?? throw new RequestException("SNAPSHOT_INDISPONIVEL", 404);
 }
