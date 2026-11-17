@@ -13,13 +13,14 @@ init_log "02_app"
 
 # --- configurações ---
 REPO_URL="https://github.com/APB-Abner/Hoodi.git"
-REPO_BRANCH="develop"
+REPO_BRANCH="${HOODI_BRANCH:-main}"   # branch publicada; outra: sudo HOODI_BRANCH=develop bash 02_infra.sh
 SRC_DIR="/opt/hoodi-src"            # código-fonte (git clone)
 APP_DIR="/opt/hoodi"                # API compilada (dotnet publish)
 APP_USER="hoodi"
 CONFIG_DIR="/etc/hoodi"
 ENV_FILE="$CONFIG_DIR/hoodi.env"
 DOTNET_DIR="/usr/share/dotnet"
+MAILPIT_VERSION="v1.33.1"          # versão fixa: o provisionamento não muda sozinho
 
 install_dependencies() {
   DEBIAN_FRONTEND=noninteractive apt-get install -y nginx sqlite3 libicu74 ca-certificates openssl
@@ -37,11 +38,16 @@ install_dotnet() {
 }
 
 install_mailpit() {
-  if [ -x /usr/local/bin/mailpit ]; then
-    log "Mailpit já instalado, pulando"
+  if [ -x /usr/local/bin/mailpit ] && /usr/local/bin/mailpit version | grep -q "${MAILPIT_VERSION}"; then
+    log "Mailpit ${MAILPIT_VERSION} já instalado, pulando"
   else
-    curl -fsSL https://raw.githubusercontent.com/axllent/mailpit/develop/install.sh -o /tmp/mailpit-install.sh && \
-    bash /tmp/mailpit-install.sh || return 1
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    curl -fsSL "https://github.com/axllent/mailpit/releases/download/${MAILPIT_VERSION}/mailpit-linux-amd64.tar.gz" \
+      -o "$tmp_dir/mailpit.tar.gz"
+    tar -xzf "$tmp_dir/mailpit.tar.gz" -C "$tmp_dir" mailpit
+    install -m 0755 "$tmp_dir/mailpit" /usr/local/bin/mailpit
+    rm -rf "$tmp_dir"
   fi
   /usr/local/bin/mailpit version
 }
@@ -65,12 +71,22 @@ fetch_source() {
 }
 
 build_api() {
-  # pausa a API antes de trocar os binários (o banco e as chaves ficam em /var/lib/hoodi)
-  systemctl stop hoodi 2>/dev/null || true
+  local new_dir="${APP_DIR}.new" old_dir="${APP_DIR}.old"
   export HOME=/root DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
-  rm -rf "$APP_DIR" && \
-  dotnet publish "$SRC_DIR/Hoodi.Api" -c Release -o "$APP_DIR" && \
-  test -f "$APP_DIR/Hoodi.Api.dll"
+
+  # 1. compila numa pasta temporária, com a API atual ainda no ar
+  rm -rf "$new_dir"
+  dotnet publish "$SRC_DIR/Hoodi.Api" -c Release -o "$new_dir"
+  test -f "$new_dir/Hoodi.Api.dll"
+
+  # 2. só chega aqui se o build deu certo: para a API e troca as pastas
+  #    (o banco e as chaves ficam em /var/lib/hoodi e não são tocados)
+  systemctl stop hoodi 2>/dev/null || true
+  rm -rf "$old_dir"
+  if [ -d "$APP_DIR" ]; then mv "$APP_DIR" "$old_dir"; fi
+  mv "$new_dir" "$APP_DIR"
+  rm -rf "$old_dir"
+  # a API volta a subir na etapa de serviços (systemctl restart hoodi)
 }
 
 create_env_file() {

@@ -49,9 +49,13 @@ fill_disk() {
 
   log "Disco antes do teste:"
   df -h /
-  log "Criando arquivo de ${missing}MB para passar de ${DISK_LIMIT}%..."
-  fallocate -l "${missing}M" "$TEST_FILE" && \
-  df -h / || return 1
+  if [ "$missing" -gt 0 ]; then
+    log "Criando arquivo de ${missing}MB para passar de ${DISK_LIMIT}%..."
+    fallocate -l "${missing}M" "$TEST_FILE"
+    df -h /
+  else
+    log "Disco já está acima de $((DISK_LIMIT + 3))%: não é preciso criar arquivo, só aguardar o alerta"
+  fi
 
   wait_time=$(( MONITOR_INTERVAL + 5 ))
   log "Aguardando ${wait_time}s pela próxima medição do monitor..."

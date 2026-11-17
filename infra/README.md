@@ -127,7 +127,7 @@ Documentação interativa: `http://IP_DA_VM/scalar`
 
 ## O que cada script faz
 
-Todos os scripts exigem `sudo`, usam `set -euo pipefail` e executam cada etapa pela função `step` da `lib/log.sh`. Se uma etapa falhar, o script para e registra `FAIL`. Todos são **idempotentes**: rodar de novo produz o mesmo resultado, sem duplicar configuração.
+Todos os scripts exigem `sudo`, usam `set -euo pipefail` e executam cada etapa pela função `stage` da `lib/log.sh`. Se uma etapa falhar, inclusive no meio de uma função, o script para e registra `FAIL`. Todos são **idempotentes**: rodar de novo produz o mesmo resultado, sem duplicar configuração.
 
 ### `lib/log.sh`
 | Função | O que faz |
@@ -135,7 +135,7 @@ Todos os scripts exigem `sudo`, usam `set -euo pipefail` e executam cada etapa p
 | `init_log` | Envia toda a saída do script para a tela e para `/var/log/hoodi/<script>.log` (via `tee`) |
 | `log` | Imprime uma mensagem com data e hora |
 | `audit` | Grava uma linha em `/var/log/hoodi/audit.log`: data, script, status e mensagem |
-| `step` | Executa uma etapa, registra `OK` ou `FAIL` e interrompe o script em caso de falha |
+| `stage` | Executa uma etapa num subshell com `set -e` próprio, registra `OK` ou `FAIL` e interrompe o script em caso de falha |
 
 ### `01_infra.sh` — infraestrutura
 | Etapa | Detalhe |
@@ -153,10 +153,10 @@ O **IP** é atribuído pelo Azure (IP privado na VNet e IP público Standard). P
 |---|---|
 | Dependências | `nginx`, `sqlite3`, `libicu74`, `openssl` |
 | .NET 10 | Instalador oficial (`dotnet-install.sh`) em `/usr/share/dotnet`, com link em `/usr/bin/dotnet` |
-| Mailpit | Instalado em `/usr/local/bin/mailpit` |
+| Mailpit | Versão fixa (`MAILPIT_VERSION`, release oficial do GitHub) em `/usr/local/bin/mailpit` |
 | Usuário de serviço | `hoodi`, de sistema, sem shell e sem home |
-| Código | `git clone` da branch `develop` em `/opt/hoodi-src` (ou `fetch` + `reset` se já existir) |
-| Build | `dotnet publish` em `/opt/hoodi`, com a API parada durante a troca |
+| Código | `git clone` da branch `main` em `/opt/hoodi-src` (ou `fetch` + `reset` se já existir). Outra branch: variável `HOODI_BRANCH` |
+| Build | `dotnet publish` numa pasta temporária (`/opt/hoodi.new`) com a API ainda no ar; só se o build der certo a API é parada e a pasta trocada. Se o build falhar, a versão anterior continua rodando |
 | Segredos | `/etc/hoodi/hoodi.env` (`root:root`, `600`) com chave JWT aleatória de 32 bytes, **gerada uma única vez** |
 | Serviços | `hoodi.service` e `hoodi-mailpit.service` da pasta `deploy/`, com override `Restart=always` |
 | nginx | `nginx.http-demo.conf.example` como site ativo; remove o site padrão; valida com `nginx -t` |
@@ -230,8 +230,11 @@ O teste usa `kill -9` e não `systemctl stop` de propósito: com o `stop`, o sys
 ## Operação do dia a dia
 
 ```bash
-# Atualizar a API com o código mais recente da develop (preserva banco e chaves)
+# Atualizar a API com o código mais recente da main (preserva banco e chaves)
 sudo bash ~/scripts/02_infra.sh
+
+# Publicar outra branch (ex.: para testar a develop)
+sudo HOODI_BRANCH=develop bash ~/scripts/02_infra.sh
 
 # Estado dos serviços
 systemctl status hoodi hoodi-mailpit hoodi-monitor nginx
@@ -254,7 +257,7 @@ az vm start      -g rg-hoodi -n vm-hoodi
 
 ## Evidências
 
-Todas as capturas foram feitas numa VM recém-criada (`vm-hoodi-clean`), provisionada só com `00_bootstrap.sh`.
+Todas as capturas foram feitas numa VM recém-criada (`vm-hoodi-clean`), provisionada só com `00_bootstrap.sh` a partir da branch `develop` da época; por isso o Scalar ainda não mostra os endpoints de risco.
 
 ### Provisionamento do zero
 
@@ -301,7 +304,7 @@ Todas as capturas foram feitas numa VM recém-criada (`vm-hoodi-clean`), provisi
 
 ### Fluxo completo da API
 
-Teste de ponta a ponta com dados fictícios: cadastro → e-mail → confirmação → login.
+Teste de ponta a ponta com dados fictícios: cadastro → e-mail → confirmação → login. Senha e tokens estão borrados nas capturas; a conta de teste existia só na VM limpa, que já foi apagada.
 
 **12. `POST /v1/auth/registrar` → 202**
 ![Registrar](evidence/12-api-register.jpg)
