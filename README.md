@@ -92,6 +92,16 @@ Desligar o redirect no backend não altera as políticas de rede do aplicativo: 
 
 Não exponha a porta interna 5000 nem habilite a variável que confia automaticamente em todos os proxies. Cabeçalhos recebidos diretamente de origens não confiáveis são ignorados. Assim a aplicação reconhece o HTTPS encerrado no nginx e o limite permanece por cliente.
 
+## Infraestrutura na VM (Operating Systems)
+
+A VM Linux é provisionada só com shell script, a partir de uma máquina zerada, pelos scripts em [`infra/scripts`](infra/scripts). Um único comando configura a rede (hostname, DNS, firewall), instala o .NET 10, publica a API, aplica os modelos de `deploy/` (systemd, Mailpit e nginx no modo HTTP de demonstração) e sobe o monitoramento de CPU, memória e disco, com log de auditoria de cada etapa.
+
+```bash
+sudo bash infra/scripts/00_bootstrap.sh
+```
+
+Arquitetura, passo a passo de reprodução, testes de falha e evidências: [infra/README.md](infra/README.md).
+
 ## Fluxo de autenticação
 
 | Operação | Comportamento |
@@ -142,7 +152,7 @@ dotnet ef migrations has-pending-model-changes --project Hoodi.Infrastructure --
 
 Os testes usam dados sintéticos, arquivos SQLite isolados, migration real e relógio controlável. Os testes adicionais recriam o host em Production com o mesmo banco/chaves, verificam JWT e replay após reinício, preservação de e-mail pendente, forwarded headers, limites por cliente e respostas 409/500.
 
-A recriação de host automatizada não prova o teste de falha Linux. Ainda falta executar na VM o encerramento do processo e reinício pelo systemd, validar nginx/TLS real, permissões e envio pelo Mailpit. A integração dos deep links no app também permanece pendente.
+A recriação de host automatizada não prova o teste de falha Linux; esse teste foi executado na VM: encerramento do processo com `kill -9` e reinício pelo systemd, nginx no modo HTTP de demonstração, permissões do EnvironmentFile e envio pelo Mailpit (evidências em [infra/README.md](infra/README.md#evidências)). Continuam pendentes o nginx com TLS real (domínio e certificado) e a integração dos deep links no app.
 
 A baseline v0.5.1 foi preservada. O patch v0.5.2 definiu o resgate de convites; a v0.5.3 acrescenta normalização e respostas 400. A v0.6 ainda precisa implementar o snapshot H3 resolução 9 definido no [registro do produtor](docs/risk-snapshot-v1-v0.6.md), usando o CSV completo, manifesto e fixture reais.
 
