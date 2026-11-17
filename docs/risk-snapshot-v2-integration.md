@@ -42,7 +42,7 @@ Keep the JWT private in the operator environment; never commit/share it. First p
 
 Reads are public aggregates. Before first publication: 404 `SNAPSHOT_INDISPONIVEL`; invalid H3/band: 400. The full CSV replaces old paginated geohash/day JSON. Metadata/download calls may straddle publication: hash the exact bytes and retry both if inconsistent. Never combine mismatched versions or infer risk zero from absent data. Preserve the warning in the app.
 
-Real-data tests exercise H3 geometry, producer files, API authorization, upload, download, fixture and malformed packages. Existing scaffold tests cover concurrent/idempotent publication and rollback after SQL writes. VM/nginx import, mobile/native consumption, route provider and quota policy decisions remain separate integration work.
+Real-data tests exercise H3 geometry, producer files, API authorization, upload, download, fixture and malformed packages. Existing scaffold tests cover concurrent/idempotent publication and rollback after SQL writes. Route slicing/scoring/ranking and the HeiGIT adapter are implemented in the [route increment](routes-v0.6.md); live provider calls, VM/nginx import, native consumption and quota policy decisions remain integration work.
 
 ## Public read cost and rate limiting
 

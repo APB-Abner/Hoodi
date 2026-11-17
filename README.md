@@ -1,6 +1,6 @@
 # hoodi — API
 
-Backend em .NET 10. Autenticação, contatos/convites, tokens Expo, exclusão de conta e pânico estão implementados. A grade H3 agora tem importação protegida, publicação atômica e leitura pública do pacote real v2; veja [a integração da grade](docs/risk-snapshot-v2-integration.md) e [os limites do pânico](docs/panic-account-v0.6.md). Rotas e autenticação de dispositivos continuam pendentes. A grade usa H3 resolução 9, cinco faixas (`0–4`) e níveis (`0–3`), com supressão de contagens abaixo de 3.
+Backend em .NET 10. Autenticação, contatos/convites, tokens Expo, exclusão de conta, pânico e grade H3 v2 estão implementados. Rotas agora incluem fatiamento, cálculo, ranking e adaptador HeiGIT; falta configurar a chave e validar a integração real. Veja [rotas](docs/routes-v0.6.md), [grade](docs/risk-snapshot-v2-integration.md) e [pânico](docs/panic-account-v0.6.md). Autenticação de dispositivos continua pendente.
 
 ## Integrantes
 
@@ -143,7 +143,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 139 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/risk-cache-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
+Última execução: 163 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/routes-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
@@ -219,6 +219,16 @@ As três leituras compartilham limite de 120 pedidos/minuto por IP (429 no exces
 `POST /v1/admin/risco/importar` exige JWT válido e conta autorizada em `Risk__ImporterUserIds__0`; a lista padrão é vazia. A importação verifica os hashes aprovados de CSV, manifesto e fixture. Primeiro sucesso retorna 201; repetição idêntica retorna 200. Uma falha preserva a publicação anterior. O início da API não publica automaticamente o pacote.
 
 O app precisa adotar o [contrato incremental H3](contracts/v0.6/risk.openapi.yaml), que substitui o antigo desenho de geohash/JSON paginado por CSV histórico completo. Veja [o procedimento de importação e consumo](docs/risk-snapshot-v2-integration.md). Validação dos artefatos e contrato: `python scripts/validate_risk_v2.py` (também com `python -O`). O produtor, commit e hashes estão em [SOURCE.md](data/risk/v2/SOURCE.md).
+
+
+
+## Rotas — passos 2 a 4
+
+Fatiamento em até 5 m, cálculo e ranking estão implementados e conferidos contra os vetores do Nando. `POST /v1/rotas/avaliar` usa a grade publicada e busca alternativas a pé no HeiGIT. Configure **`Rotas__ApiKey` somente no ambiente privado da API**, nunca no app ou no Git.
+
+As opções são `Rotas__FonteRisco=PontuacaoMensal|Nivel` e `Rotas__SemDado=Desconhecido|RiscoBaixo`. Os padrões são `PontuacaoMensal` e `Desconhecido`. Fora da cobertura continua desconhecido nos dois modos. `RiscoBaixo` é uma hipótese explícita para os trechos sem dado; não significa que sejam seguros. Sem chave não há chamada externa nem rotas fictícias.
+
+Veja [configuração e critérios](docs/routes-v0.6.md) e [contrato incremental](contracts/v0.6/routes.openapi.yaml). A faixa é a da partida e vale para todo o trajeto; `tipoDia` foi removido. Esta versão muda a fórmula, o empate e a geometria em relação à v0.5, exigindo adaptação do app. Não foi feita chamada real ao provedor.
 
 ## Fluxo Git
 
