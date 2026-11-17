@@ -47,6 +47,15 @@ builder.Services.AddDbContext<HoodiDbContext>(options => options.UseSqlite(
     builder.Configuration["Database:ConnectionString"] ?? "Data Source=hoodi.local.db").AddInterceptors(new SqlitePrivacyInterceptor()));
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IAutenticacaoService, AutenticacaoService>();
+builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.H3SpatialIndex>();
+builder.Services.AddSingleton<Hoodi.Application.Risk.IH3CellValidator>(s => s.GetRequiredService<Hoodi.Infrastructure.Risk.H3SpatialIndex>());
+builder.Services.AddScoped<Hoodi.Application.Risk.IProducerSnapshotDecoder, Hoodi.Infrastructure.Risk.ProducerV2Decoder>();
+builder.Services.AddScoped<Hoodi.Application.Risk.ISnapshotPublicationStore, Hoodi.Infrastructure.Risk.SnapshotPublicationStore>();
+builder.Services.AddScoped<Hoodi.Application.Risk.SnapshotImportService>();
+builder.Services.AddOptions<Hoodi.Infrastructure.Risk.RiskSnapshotOptions>().Bind(builder.Configuration.GetSection("Risk"))
+    .Validate(o => new[] { o.ApprovedCsvSha256, o.ApprovedManifestSha256, o.ApprovedFixtureSha256 }.All(x =>
+        x is not null && System.Text.RegularExpressions.Regex.IsMatch(x, "\\A[0-9a-f]{64}\\z")), "Risk approved hashes must be lowercase SHA-256 values.")
+    .ValidateOnStart();
 builder.Services.AddScoped<Hoodi.Application.Conta.IContaService, Hoodi.Infrastructure.Conta.ContaService>();
 builder.Services.AddScoped<Hoodi.Application.Panico.IPanicoService, Hoodi.Infrastructure.Panico.PanicoService>();
 builder.Services.AddScoped<Hoodi.Infrastructure.Panico.PanicoDispatchProcessor>();

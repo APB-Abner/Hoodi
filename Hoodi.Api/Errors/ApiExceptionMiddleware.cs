@@ -14,6 +14,8 @@ public sealed class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExce
         {
             var (status, code, title) = ex switch
             {
+                Hoodi.Application.Risk.SnapshotValidationException snapshot =>
+                    (snapshot.Code == "VERSAO_CONFLITANTE" ? 409 : 422, snapshot.Code, "Snapshot inválido"),
                 Hoodi.Application.Errors.RequestException request => (request.Status, request.Code, "Solicitação inválida"),
                 AutenticacaoException auth => (auth.Status, auth.Code,
                     auth.Status == 429 ? "Limite de tentativas" : "Solicitação inválida"),

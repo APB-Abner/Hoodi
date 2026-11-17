@@ -1,5 +1,7 @@
 ﻿# Risk snapshot v1 — v0.6 decision record
 
+Historical record: delivered v2 supersedes the v1 no-suppression rule. See [v2 integration](risk-snapshot-v2-integration.md). The v1 content below is decision history.
+
 Status: producer definitions confirmed by the user on 2026-11-14. This supersedes the 09/11 consolidated document and the earlier draft. It is not an implemented risk API or evidence that producer files have been received.
 
 ## Spatial and temporal keys

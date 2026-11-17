@@ -1,0 +1,156 @@
+openapi: 3.1.0
+info:
+  title: hoodi - H3 risk snapshot v2 increment
+  version: 0.6.0-draft
+  description: >-
+    Replaces the unimplemented geohash grade operations from the preserved v0.5.3
+    baseline with a complete H3 resolution-9 historical CSV (Jan-Sep 2026).
+paths:
+  /v1/risco/versao-atual:
+    get:
+      operationId: get_v1_risco_versao_atual
+      security: []
+      responses:
+        '200':
+          description: Current immutable publication and exact producer manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [versao, sha256, publicadoEm, manifest]
+                properties:
+                  versao: {type: string}
+                  sha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+                  publicadoEm: {type: string, format: date-time}
+                  manifest: {type: object}
+        '404': {$ref: '#/components/responses/Unavailable'}
+  /v1/risco/grade:
+    get:
+      operationId: get_v1_risco_grade
+      security: []
+      description: >-
+        Complete UTF-8/LF CSV. Hash exact bytes against metadata before use.
+        Calls can straddle publication; on mismatch fetch metadata and download again.
+        sem_dado includes zero or suppressed 1-2 records, never risk level zero.
+      parameters:
+      - name: If-None-Match
+        in: header
+        schema: {type: string}
+      responses:
+        '200':
+          description: Complete risco_h3_faixa_v2.csv
+          headers:
+            ETag:
+              schema: {type: string}
+          content:
+            text/csv:
+              schema: {type: string}
+        '304': {description: Current quoted SHA matches If-None-Match}
+        '404': {$ref: '#/components/responses/Unavailable'}
+  /v1/risco/celulas/{h3Cell}:
+    get:
+      operationId: get_v1_risco_celula
+      security: []
+      parameters:
+      - name: h3Cell
+        in: path
+        required: true
+        schema: {type: string, pattern: '^[0-9a-f]{15}$'}
+      - name: faixa
+        in: query
+        required: true
+        schema: {type: integer, minimum: 0, maximum: 4}
+      responses:
+        '200':
+          description: Distinguishes com_dado, sem_dado and fora_cobertura
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [versao, sha256, h3Cell, faixa, status, nivel, pontuacaoMensal, nRegistros]
+                properties:
+                  versao: {type: string}
+                  sha256: {type: string}
+                  h3Cell: {type: string}
+                  faixa: {type: integer, minimum: 0, maximum: 4}
+                  status: {type: string, enum: [com_dado, sem_dado, fora_cobertura]}
+                  nivel: {type: [integer, 'null'], minimum: 0, maximum: 3}
+                  pontuacaoMensal: {type: [number, 'null']}
+                  nRegistros: {type: [integer, 'null'], minimum: 0}
+                allOf:
+                - if: {properties: {status: {const: com_dado}}}
+                  then:
+                    properties:
+                      nivel: {type: integer}
+                      pontuacaoMensal: {type: number, exclusiveMinimum: 0}
+                      nRegistros: {type: integer, minimum: 3}
+                - if: {properties: {status: {const: sem_dado}}}
+                  then:
+                    properties:
+                      nivel: {type: 'null'}
+                      pontuacaoMensal: {type: 'null'}
+                      nRegistros: {const: 0}
+                - if: {properties: {status: {const: fora_cobertura}}}
+                  then:
+                    properties:
+                      nivel: {type: 'null'}
+                      pontuacaoMensal: {type: 'null'}
+                      nRegistros: {type: 'null'}
+        '400': {description: Invalid cell/band; actual H3 validity and resolution are checked beyond regex}
+        '404': {$ref: '#/components/responses/Unavailable'}
+  /v1/admin/risco/importar:
+    post:
+      operationId: post_v1_admin_risco_importar
+      security:
+      - bearerAuth: []
+      description: >-
+        Requires valid session and sub in Risk:ImporterUserIds (empty by default).
+        Multipart <=1 MiB; CSV <=900000 bytes, manifest/fixture <=64000 each,
+        checksum <=256. CSV/manifest/fixture hashes must match approved deployment
+        hashes. Atomic publication preserves previous version on failure.
+        Identical reimport never reactivates an older existing publication.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [versao, csv, sha256, manifest, fixture]
+              properties:
+                versao: {type: string, minLength: 1, maxLength: 128}
+                csv: {type: string, format: binary}
+                sha256: {type: string, format: binary}
+                manifest: {type: string, format: binary}
+                fixture: {type: string, format: binary}
+      responses:
+        '201':
+          description: New immutable snapshot published
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Publication'}
+        '200':
+          description: Identical version already published; current pointer unchanged
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Publication'}
+        '400': {description: Invalid multipart or checksum file format}
+        '401': {description: Invalid authentication/session}
+        '403': {description: IMPORTACAO_NAO_AUTORIZADA}
+        '409': {description: VERSAO_CONFLITANTE}
+        '413': {description: Request/file size exceeded}
+        '422': {description: Artifact approval, integrity, schema, H3, coverage or fixture validation failed}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  responses:
+    Unavailable: {description: SNAPSHOT_INDISPONIVEL - no publication yet}
+  schemas:
+    Publication:
+      type: object
+      required: [version, sha256, publishedAtUtc, alreadyPublished]
+      properties:
+        version: {type: string}
+        sha256: {type: string}
+        publishedAtUtc: {type: string, format: date-time}
+        alreadyPublished: {type: boolean}
