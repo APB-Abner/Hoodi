@@ -49,6 +49,13 @@ builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IAutenticacaoService, AutenticacaoService>();
 builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.H3SpatialIndex>();
 builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.SnapshotCellCache>();
+builder.Services.AddSingleton<Hoodi.Infrastructure.Rotas.RouteScoring>();
+builder.Services.AddOptions<Hoodi.Infrastructure.Rotas.RotasOptions>().Bind(builder.Configuration.GetSection("Rotas"))
+    .Validate(o => Enum.IsDefined(o.FonteRisco) && Enum.IsDefined(o.SemDado), "Rotas modes must be defined enum values.").ValidateOnStart();
+builder.Services.AddHttpClient<Hoodi.Application.Rotas.IProvedorRotas, Hoodi.Infrastructure.Rotas.HeigitRoutesProvider>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15); client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddSingleton<Hoodi.Application.Risk.IH3CellValidator>(s => s.GetRequiredService<Hoodi.Infrastructure.Risk.H3SpatialIndex>());
 builder.Services.AddScoped<Hoodi.Application.Risk.IProducerSnapshotDecoder, Hoodi.Infrastructure.Risk.ProducerV2Decoder>();
 builder.Services.AddScoped<Hoodi.Application.Risk.ISnapshotPublicationStore, Hoodi.Infrastructure.Risk.SnapshotPublicationStore>();
@@ -116,6 +123,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddHttpsRedirection(options => options.HttpsPort = builder.Configuration.GetValue("Https:Port", 443));
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy("rotas", context => RateLimitPartition.GetFixedWindowLimiter(context.User.FindFirst("sub")?.Value ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("risco-publico", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

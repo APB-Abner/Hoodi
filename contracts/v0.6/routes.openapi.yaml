@@ -1,0 +1,97 @@
+openapi: 3.1.0
+info:
+  title: hoodi - retrospective H3 route comparison increment
+  version: 0.6.0-draft
+  description: >-
+    Replaces v0.5 geohash/tipoDia/extrapolation ranking for this operation. H3 v2
+    snapshot, 5m midpoint discretization, departure band for the entire trip,
+    accumulated index ranking with numeric tolerance before display rounding.
+    This is historical analysis, not prediction or an assertion of safety.
+paths:
+  /v1/rotas/avaliar:
+    post:
+      operationId: post_v1_rotas_avaliar
+      security: [{bearerAuth: []}]
+      description: >-
+        No route persistence. Endpoints are transmitted to HeiGIT using a private
+        server key. Configuration Rotas:FonteRisco=PontuacaoMensal|Nivel and
+        Rotas:SemDado=Desconhecido|RiscoBaixo is echoed in the response.
+        RiscoBaixo counts sem_dado toward coverage with zero score, an explicit
+        hypothesis, never evidence of safety. Outside coverage stays unknown.
+        All positions are null if any route has <70% effective coverage; one
+        sufficient route is inconclusive. Two/three sufficient routes are ranked
+        by unrounded accumulated score, anchored 1e-9 ties, km, then input order.
+        Limit 15/minute/account, request <=4 KiB. Snapshot and native integration
+        must be available; absence returns indisponivel, never synthetic routes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [origem, destino, saidaEm]
+              properties:
+                origem: {$ref: '#/components/schemas/Point'}
+                destino: {$ref: '#/components/schemas/Point'}
+                saidaEm: {type: string, format: date-time, description: 'Explicit Z or +/-HH:MM required; server window now-5min through now+48h and arrival <=now+48h'}
+      responses:
+        '200':
+          description: Comparison result; geometry is explicit lat/lon objects, not encoded polyline
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [situacao, motivo, versaoGrade, fonteRisco, semDado, unidadeIndice, rotas, aviso]
+                properties:
+                  situacao: {type: string, enum: [concluida, inconclusiva, indisponivel]}
+                  motivo: {type: [string, 'null']}
+                  versaoGrade: {type: [string, 'null']}
+                  fonteRisco: {type: string, enum: [PontuacaoMensal, Nivel]}
+                  semDado: {type: string, enum: [Desconhecido, RiscoBaixo]}
+                  unidadeIndice: {type: string, enum: [pontos_por_mes_hora_x_km, nivel_x_km]}
+                  aviso: {type: string}
+                  rotas:
+                    type: array
+                    maxItems: 3
+                    items:
+                      type: object
+                      required: [rotaId, duracaoSegundos, geometria, pontuacao, posicao, faixa]
+                      properties:
+                        rotaId: {type: string}
+                        duracaoSegundos: {type: number, exclusiveMinimum: 0}
+                        geometria:
+                          type: array
+                          minItems: 2
+                          items: {$ref: '#/components/schemas/Point'}
+                        posicao: {type: [integer, 'null'], minimum: 1, maximum: 3}
+                        faixa: {type: integer, minimum: 0, maximum: 4}
+                        pontuacao: {$ref: '#/components/schemas/Score'}
+        '400': {description: DADOS_INVALIDOS - malformed/extra/missing fields or invalid date format}
+        '401': {description: Invalid user session}
+        '413': {description: Input size limit exceeded}
+        '422': {description: SAIDA_FORA_JANELA, ROTA_INVALIDA or ROTA_EXTENSA}
+        '429': {description: LIMITE_TENTATIVAS}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  schemas:
+    Point:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude]
+      properties:
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, exclusiveMaximum: 180}
+    Score:
+      type: object
+      required: [acumulada, indicePorKm, metrosTotal, metrosComDado, percentualSemDado, percentualForaCobertura, coberturaPercentual, dadoInsuficiente]
+      properties:
+        acumulada: {type: number, minimum: 0}
+        indicePorKm: {type: [number, 'null'], minimum: 0}
+        metrosTotal: {type: number, minimum: 0}
+        metrosComDado: {type: number, minimum: 0}
+        percentualSemDado: {type: number, minimum: 0, maximum: 100}
+        percentualForaCobertura: {type: number, minimum: 0, maximum: 100}
+        coberturaPercentual: {type: number, minimum: 0, maximum: 100}
+        dadoInsuficiente: {type: boolean}
