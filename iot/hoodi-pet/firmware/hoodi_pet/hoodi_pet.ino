@@ -1,7 +1,10 @@
-// hoodi Pet - firmware 1.0.0 (ESP32-C3 SuperMini)
+// hoodi Pet - firmware 1.1.0 (ESP32-C3 SuperMini, carcaca v7b)
 //
 // O Pet so executa: quem decide quando alertar e o app (regra de subida de nivel, intervalo, histerese).
 // GPS, grade de risco e API ficam no celular. O Pet nunca chama a API.
+//
+// Botoes: 1 (GPIO4) clique acende a tela | 2 (GPIO10) silencia vibracao e som | 3 (GPIO20) segurar 3 s = ajuda.
+// Segurar o botao 1 ao ligar abre o pareamento. Alto-falante no GPIO5 via transistor NPN.
 //
 // Arduino IDE: placa "ESP32C3 Dev Module", USB CDC On Boot: Enabled.
 // Bibliotecas: NimBLE-Arduino 2.5.x, Adafruit SSD1306, Adafruit GFX.
@@ -10,7 +13,7 @@
 // Serial (115200), uma linha por comando:
 //   n0 n1 n2 n3 n?   estado com nivel 0..3 ou desconhecido (padrao e expressao automaticos)
 //   id               identificar (vibra para achar o Pet)
-//   sil              silenciar a vibracao atual
+//   sil              silenciar a vibracao e o som
 //   fim              fim do trajeto (carinha dormindo)
 //   hex <18 hex>     frame bruto, passa pela regra de sequencia. Ex.: hex 010101000000020202
 //   st               imprime o estado

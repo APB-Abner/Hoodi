@@ -19,7 +19,7 @@ O nome anunciado é `hoodi Pet XXXX`, em que XXXX vem do MAC. O nome vai na resp
 - Na primeira conexão, o sistema do celular pede um PIN de 6 dígitos. O PIN aparece no OLED e é aleatório a cada pareamento.
 - O PIN só aparece com o Pet em **modo pareamento**. Esse modo abre:
   - sozinho, quando o Pet ainda não tem celular salvo;
-  - quando a pessoa segura o botão por 2 s ao ligar;
+  - quando a pessoa segura o botão 1 (tela) por 2 s ao ligar;
   - pelos comandos `parear` ou `esquecer` no Serial.
 
   Fora desse modo, ninguém vê o PIN, então nenhum aparelho por perto consegue parear.
@@ -46,7 +46,7 @@ O nome anunciado é `hoodi Pet XXXX`, em que XXXX vem do MAC. O nome vai na resp
 - **Nível desconhecido nunca vibra**, mesmo que o padrão peça vibração. A tela mostra "?".
 - **Nos tipos 2 a 4**, os bytes 6–8 são ignorados (mandar 0).
   - Identificar vibra rápido 5 vezes, pra achar o Pet.
-  - Silenciar corta a vibração em andamento.
+  - Silenciar corta a vibração e o som em andamento.
   - FimTrajeto mostra a carinha dormindo.
 - **Para só trocar a carinha sem vibrar** (por exemplo, quando o nível desce), mandar Estado com padrão `0`.
 
@@ -68,17 +68,21 @@ Exemplo: `01 01 01000000 02 02 02` é Estado, sequência 1, nível 2, vibração
 | Byte | Campo |
 |---|---|
 | 0 | versão (`1`) |
-| 1 | `1` clique, `2` pressão longa (3 s, com 1 vibração curta de confirmação) |
+| 1 | `1` clique no botão 1 (tela); `2` pressão longa de 3 s no botão 3 (ajuda), com 1 vibração curta de confirmação |
 | 2–5 | contador u32 (cresce a cada evento; zera quando o Pet reinicia) |
 
-O app decide o que cada evento faz. A pressão longa está pronta para o pedido de ajuda, **se o time confirmar o pânico**. Nesse caso o fluxo é botão → BLE → app → `POST /v1/panico`, com a autenticação e a idempotência do app.
+O app decide o que cada evento faz. O evento `2` é o pedido de ajuda: botão 3 → BLE → app → `POST /v1/panico`, com a autenticação e a idempotência do app.
+
+- O botão 2 (silenciar) **não** gera evento. Ele corta a vibração e o som no próprio Pet, igual ao comando Silenciar.
+- Sem celular conectado, o Pet não manda o evento `2`. Ele vibra longo + curto e mostra "Sem celular / ajuda nao enviada", para a pessoa saber que o pedido não saiu.
+- Os bytes não mudaram em relação à versão anterior do firmware: o protocolo continua na versão 1.
 
 ## Regras
 
 1. **Sequência por conexão.** O Pet zera a sequência a cada conexão, e o app recomeça em 1. O Pet ignora o comando cuja sequência for menor ou igual à última aceita; pular números é permitido.
 2. **Celular desconectou.** O Pet não sabe mais o nível, então mostra "sem celular" (ou dormindo, se não havia trajeto). Se a conexão caiu durante um trajeto e ficou 20 s sem voltar, vibra uma vez no padrão de perda de conexão (longo e depois curto).
 3. **Reconectou.** O app reenvia o último nível **sem vibrar** (o `hoodiPetBle.ts` já faz isso).
-4. **Tela.** A tela apaga 10 s depois da última novidade. Um clique no botão acende de novo. No modo pareamento, a tela fica acesa.
+4. **Tela.** A tela apaga 10 s depois da última novidade. Um clique no botão 1 ou no 2 acende de novo. No modo pareamento, a tela fica acesa.
 5. **Regra de alerta, no app** (`regraAlerta.ts`):
    - alerta no início do trajeto se o nível já for 2 ou 3;
    - depois, só quando o nível sobe, com intervalo mínimo de 2 min. Se a subida for bloqueada pelo intervalo, ela fica pendente e vibra quando o intervalo acaba;

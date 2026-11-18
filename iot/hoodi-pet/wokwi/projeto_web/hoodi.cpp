@@ -3,24 +3,44 @@
 #define HOODI_SEM_BLE 1
 
 // ===== config.h =====
-// Configuracao do hoodi Pet. Ligacoes conforme o documento consolidado.
+// Configuracao do hoodi Pet. Ligacoes conforme a carcaca v7b (3 botoes + alto-falante).
 
 // 1 = sem Bluetooth (Wokwi nao simula BLE): comandos chegam so pelo Serial.
 #ifndef HOODI_SEM_BLE
 #define HOODI_SEM_BLE 0
 #endif
 
-#define HOODI_VERSAO_FIRMWARE "1.0.0"
+// 1 = build de simulacao (Wokwi). Por padrao acompanha HOODI_SEM_BLE.
+#ifndef HOODI_WOKWI
+#define HOODI_WOKWI HOODI_SEM_BLE
+#endif
 
-// Pinos (ESP32-C3 SuperMini). GPIO8 (LED) e GPIO9 (BOOT) ficam livres: afetam o boot.
+#define HOODI_VERSAO_FIRMWARE "1.1.0"
+
+// Pinos (ESP32-C3 SuperMini). GPIO8 (LED) e GPIO9 (BOOT) ficam livres: afetam o boot. GPIO2 tambem e de boot.
 constexpr int PINO_SDA = 6;
 constexpr int PINO_SCL = 7;
-constexpr int PINO_VIBRACAO = 3;   // IN do modulo de vibracao (com driver). Nunca o motor direto.
-constexpr int PINO_BOTAO = 4;      // botao para GND, pull-up interno
+constexpr int PINO_VIBRACAO = 3;          // IN do modulo de vibracao (VCC no +BAT). Nunca o motor direto.
+constexpr int PINO_SOM = 5;               // base do NPN via 1 kOhm. Nunca o alto-falante direto no GPIO.
+constexpr int PINO_BOTAO_TELA = 4;        // botao 1: clique acende a tela e avisa o app; segurar ao ligar = pareamento
+constexpr int PINO_BOTAO_SILENCIAR = 10;  // botao 2: clique corta vibracao e som
+#if HOODI_WOKWI
+constexpr int PINO_BOTAO_AJUDA = 1;       // no Wokwi o GPIO20 e o RX do Serial Monitor; la o botao 3 fica no GPIO1
+#else
+constexpr int PINO_BOTAO_AJUDA = 20;      // botao 3: segurar 3 s = pedido de ajuda. GPIO20 e o RX da UART0:
+                                          // exige "USB CDC On Boot: Enabled" (o Serial vai pela USB)
+#endif
+
+// Som. Silenciar (botao 2 ou comando do app) corta som e vibracao juntos.
+constexpr bool SOM_HABILITADO = true;
+// Som no pedido de ajuda (enviado ou falhou por falta de celular). Desligado de proposito: quem pede ajuda
+// pode estar perto de quem ameaca, e um bipe chama atencao. Com false, a resposta fica so na vibracao:
+// curta = enviado; longa + curta = NAO saiu (sem celular).
+constexpr bool SOM_NO_PEDIDO_DE_AJUDA = false;
 
 constexpr unsigned long TELA_APAGA_MS = 10000;          // apaga a tela apos 10 s sem novidade
-constexpr unsigned long PRESSAO_LONGA_MS = 3000;        // evento PressaoLonga (pedido de ajuda, se o time confirmar)
-constexpr unsigned long BOOT_PAREAR_MS = 2000;          // segurar o botao ao ligar = modo pareamento
+constexpr unsigned long PRESSAO_LONGA_MS = 3000;        // botao 3 segurado = evento PressaoLonga (pedido de ajuda)
+constexpr unsigned long BOOT_PAREAR_MS = 2000;          // segurar o botao 1 ao ligar = modo pareamento
 constexpr unsigned long PAREAMENTO_DURACAO_MS = 120000; // modo pareamento fecha sozinho em 2 min
 constexpr unsigned long AVISO_DESCONEXAO_MS = 20000;    // vibra 1x se ficar 20 s sem o celular durante um trajeto
 
@@ -255,6 +275,102 @@ class Botao {
   uint32_t msLonga_, msDebounce_;
   bool bruto_ = false, estavel_ = false, longaDisparada_ = false;
   uint32_t mudouEm_ = 0, apertouEm_ = 0;
+};
+
+}  // namespace hoodi
+
+// ===== som.h =====
+// Maquina de estados do alto-falante, sem delay(): o loop chama atualizar(millis()) e toca a frequencia
+// devolvida (0 = silencio). C++ puro, testado no PC (testes/protocolo_test.cpp).
+// Hardware: GPIO5 -> 1 kOhm -> base do NPN; alto-falante entre +BAT (via 33 Ohm) e o coletor; diodo no falante.
+
+#include <stddef.h>
+#include <stdint.h>
+
+namespace hoodi {
+
+enum class Toque : uint8_t {
+  Nenhum,
+  Nivel1, Nivel2, Nivel3,   // acompanham a vibracao do alerta (curto, duplo, longo)
+  Identificar,              // ajuda a achar o Pet
+  PerdeuConexao,
+  Pin,                      // PIN de pareamento apareceu na tela
+  Pareado,
+  Ajuda,                    // pedido de ajuda enviado (desligado por padrao: ver SOM_NO_PEDIDO_DE_AJUDA)
+  AjudaSemCelular           // pedido de ajuda NAO saiu: Pet sem celular conectado
+};
+
+struct Nota {
+  uint16_t ms;
+  uint16_t hz;  // 0 = silencio
+};
+
+inline Toque toqueDoPadrao(Padrao p) {
+  switch (p) {
+    case Padrao::Curto: return Toque::Nivel1;
+    case Padrao::Duplo: return Toque::Nivel2;
+    case Padrao::Longo: return Toque::Nivel3;
+    case Padrao::Identificar: return Toque::Identificar;
+    case Padrao::PerdeuConexao: return Toque::PerdeuConexao;
+    default: return Toque::Nenhum;
+  }
+}
+
+inline const Nota* notasDoToque(Toque t, size_t& n) {
+  static const Nota nivel1[] = {{120, 2000}};
+  static const Nota nivel2[] = {{120, 2000}, {100, 0}, {120, 2000}};
+  static const Nota nivel3[] = {{150, 2600}, {80, 0}, {150, 2600}, {80, 0}, {300, 2600}};
+  static const Nota identificar[] = {{70, 2400}, {50, 0}, {70, 3000}, {50, 0}, {70, 2400}, {50, 0}, {70, 3000}};
+  static const Nota perdeuConexao[] = {{250, 1600}, {60, 0}, {350, 1000}};
+  static const Nota pin[] = {{90, 1800}};
+  static const Nota pareado[] = {{100, 1500}, {40, 0}, {160, 2200}};
+  static const Nota ajuda[] = {{100, 2200}, {40, 0}, {100, 2200}};
+  static const Nota ajudaSemCelular[] = {{300, 900}, {80, 0}, {300, 900}};
+  switch (t) {
+    case Toque::Nivel1: n = sizeof(nivel1) / sizeof(Nota); return nivel1;
+    case Toque::Nivel2: n = sizeof(nivel2) / sizeof(Nota); return nivel2;
+    case Toque::Nivel3: n = sizeof(nivel3) / sizeof(Nota); return nivel3;
+    case Toque::Identificar: n = sizeof(identificar) / sizeof(Nota); return identificar;
+    case Toque::PerdeuConexao: n = sizeof(perdeuConexao) / sizeof(Nota); return perdeuConexao;
+    case Toque::Pin: n = sizeof(pin) / sizeof(Nota); return pin;
+    case Toque::Pareado: n = sizeof(pareado) / sizeof(Nota); return pareado;
+    case Toque::Ajuda: n = sizeof(ajuda) / sizeof(Nota); return ajuda;
+    case Toque::AjudaSemCelular: n = sizeof(ajudaSemCelular) / sizeof(Nota); return ajudaSemCelular;
+    default: n = 0; return nullptr;
+  }
+}
+
+class Som {
+ public:
+  // Um toque novo substitui o que estiver tocando. Toque::Nenhum nao interrompe nada.
+  void iniciar(Toque t, uint32_t agora) {
+    size_t n = 0;
+    const Nota* notas = notasDoToque(t, n);
+    if (notas == nullptr) return;
+    notas_ = notas;
+    total_ = n;
+    indice_ = 0;
+    inicioNota_ = agora;
+  }
+  void parar() { notas_ = nullptr; total_ = 0; }
+  bool ativo() const { return notas_ != nullptr; }
+
+  // Frequencia desejada neste instante (0 = silencio).
+  uint16_t atualizar(uint32_t agora) {
+    while (notas_ != nullptr) {
+      const Nota& nota = notas_[indice_];
+      if ((uint32_t)(agora - inicioNota_) < nota.ms) return nota.hz;
+      inicioNota_ += nota.ms;
+      if (++indice_ >= total_) parar();
+    }
+    return 0;
+  }
+
+ private:
+  const Nota* notas_ = nullptr;
+  size_t total_ = 0;
+  size_t indice_ = 0;
+  uint32_t inicioNota_ = 0;
 };
 
 }  // namespace hoodi
@@ -504,13 +620,22 @@ void mensagem(const char* linha1, const char* linha2) {
 
 
 
+
 using namespace hoodi;
+
+#if !HOODI_WOKWI && defined(ARDUINO_USB_CDC_ON_BOOT) && !ARDUINO_USB_CDC_ON_BOOT
+#error "O botao de ajuda usa o GPIO20 (RX da UART0). Ative Tools > USB CDC On Boot: Enabled."
+#endif
 
 namespace {
 
 char nomeDispositivo[20];
 Vibrador vibrador;
-Botao botao(PRESSAO_LONGA_MS);
+Som som;
+uint16_t frequenciaTocando = 0;
+Botao botaoTela(PRESSAO_LONGA_MS);
+Botao botaoSilenciar(PRESSAO_LONGA_MS);
+Botao botaoAjuda(PRESSAO_LONGA_MS);
 Sequenciador sequenciador;
 
 Status estado;                        // o que o app le na caracteristica STATUS
@@ -542,6 +667,21 @@ void publicarStatus() {
   ble::publicarStatus(frame, sizeof(frame));
 }
 
+// Alerta no corpo e no som. O som acompanha o padrao da vibracao.
+void alertar(Padrao p, unsigned long agora) {
+  vibrador.iniciar(p, agora);
+  if (SOM_HABILITADO) som.iniciar(toqueDoPadrao(p), agora);
+}
+
+void tocar(Toque t) {
+  if (SOM_HABILITADO) som.iniciar(t, millis());
+}
+
+void silenciar() {
+  vibrador.parar();
+  som.parar();
+}
+
 void aplicar(const Comando& c) {
   const unsigned long agora = millis();
   switch (c.tipo) {
@@ -549,19 +689,19 @@ void aplicar(const Comando& c) {
       trajetoAtivo = true;
       estado.nivel = c.nivel;
       estado.expressao = c.expressao;
-      if (c.padrao != Padrao::Nenhum) vibrador.iniciar(c.padrao, agora);
+      if (c.padrao != Padrao::Nenhum) alertar(c.padrao, agora);
       mostrarEstado();
       break;
     case TipoComando::Identificar:
-      vibrador.iniciar(Padrao::Identificar, agora);
+      alertar(Padrao::Identificar, agora);
       mostrarEstado();
       break;
     case TipoComando::Silenciar:
-      vibrador.parar();
+      silenciar();
       break;
     case TipoComando::FimTrajeto:
       trajetoAtivo = false;
-      vibrador.parar();
+      silenciar();
       estado.nivel = NIVEL_DESCONHECIDO;
       estado.expressao = Expressao::Dormindo;
       mostrarEstado();
@@ -626,12 +766,14 @@ void processarAvisosBle() {
         break;
       case ble::TipoAviso::MostrarPin:
         tela::pin(a.valor);
+        tocar(Toque::Pin);
         Serial.println("[ble] PIN na tela do Pet");  // o PIN nao vai para o Serial de proposito
         break;
       case ble::TipoAviso::Pareado:
         Serial.println("[ble] pareado; outros celulares esquecidos");
         tela::mensagem("Pareado!", nomeDispositivo);
         vibrador.iniciar(Padrao::Curto, millis());
+        tocar(Toque::Pareado);
         ultimaNovidadeMs = millis();
         break;
       case ble::TipoAviso::PareamentoRecusado:
@@ -693,10 +835,11 @@ void comandoSerial(String linha) {
     if (hexParaBytes(linha.substring(4), frame, sizeof(frame), tam)) processarFrame(frame, tam);
     else Serial.println("[serial] hex invalido");
   } else if (linha == "st") {
-    Serial.printf("[st] fw=%s nome=%s ble=%s pareamento=%s salvos=%d trajeto=%s nivel=%u expressao=%u ultimaSeq=%lu\n",
+    Serial.printf("[st] fw=%s nome=%s ble=%s pareamento=%s salvos=%d trajeto=%s nivel=%u expressao=%u ultimaSeq=%lu som=%s\n",
                   HOODI_VERSAO_FIRMWARE, nomeDispositivo, bleConectado ? "conectado" : "livre",
                   ble::modoPareamento() ? "aberto" : "fechado", ble::pareamentosSalvos(), trajetoAtivo ? "sim" : "nao",
-                  (unsigned)estado.nivel, (unsigned)estado.expressao, (unsigned long)sequenciador.ultima);
+                  (unsigned)estado.nivel, (unsigned)estado.expressao, (unsigned long)sequenciador.ultima,
+                  SOM_HABILITADO ? "ligado" : "desligado");
   } else if (linha == "parear") {
     abrirPareamento();
   } else if (linha == "esquecer") {
@@ -721,28 +864,60 @@ void lerSerial() {
   }
 }
 
-void tratarBotao() {
+// Botao 1 (tela): clique acende a tela e avisa o app. Segurar nao faz nada (so no boot: pareamento).
+// Botao 2 (silenciar): clique ou segurar corta vibracao e som, e acende a tela.
+// Botao 3 (ajuda): so a pressao longa (3 s) conta, para nao pedir ajuda sem querer. Clique e ignorado.
+void tratarBotoes() {
   const unsigned long agora = millis();
-  switch (botao.atualizar(digitalRead(PINO_BOTAO) == LOW, agora)) {
-    case Botao::Evento::Clique:
-      // Clique acorda a tela e avisa o app (o app decide o que fazer).
-      if (!ble::modoPareamento()) mostrarEstado();
-      emitirEvento(TipoEvento::Clique);
-      break;
-    case Botao::Evento::PressaoLonga:
-      vibrador.iniciar(Padrao::Curto, agora);  // confirma no corpo que a pressao longa foi reconhecida
-      emitirEvento(TipoEvento::PressaoLonga);
-      break;
-    case Botao::Evento::Nenhum:
-      break;
+
+  if (botaoTela.atualizar(digitalRead(PINO_BOTAO_TELA) == LOW, agora) == Botao::Evento::Clique) {
+    if (!ble::modoPareamento()) mostrarEstado();
+    emitirEvento(TipoEvento::Clique);
   }
+
+  if (botaoSilenciar.atualizar(digitalRead(PINO_BOTAO_SILENCIAR) == LOW, agora) != Botao::Evento::Nenhum) {
+    silenciar();
+    if (!ble::modoPareamento()) mostrarEstado();
+    Serial.println("[botao] silenciado");
+  }
+
+  if (botaoAjuda.atualizar(digitalRead(PINO_BOTAO_AJUDA) == LOW, agora) == Botao::Evento::PressaoLonga) {
+    // Sem BLE (Wokwi) o evento sai pelo Serial; no Pet real, sem celular conectado ninguem recebe.
+    const bool entregue = HOODI_SEM_BLE || bleConectado;
+    som.parar();  // discricao: um alerta tocando para na hora em que a pessoa pede ajuda
+    if (entregue) {
+      vibrador.iniciar(Padrao::Curto, agora);  // confirma no corpo que o pedido saiu
+      if (SOM_NO_PEDIDO_DE_AJUDA) tocar(Toque::Ajuda);
+      emitirEvento(TipoEvento::PressaoLonga);
+    } else {
+      vibrador.iniciar(Padrao::PerdeuConexao, agora);  // longo + curto: a ajuda NAO saiu
+      if (SOM_NO_PEDIDO_DE_AJUDA) tocar(Toque::AjudaSemCelular);
+      tela::mensagem("Sem celular", "ajuda nao enviada");
+      ultimaNovidadeMs = agora;
+      Serial.println("[botao] pedido de ajuda sem celular conectado: nao enviado");
+    }
+  }
+}
+
+// So mexe no PWM quando a frequencia muda (tone() reconfigura o LEDC a cada chamada).
+void tocarFrequencia(uint16_t hz) {
+  if (hz == frequenciaTocando) return;
+  if (hz == 0) {
+    noTone(PINO_SOM);
+    // noTone solta o pino do LEDC (fica flutuando). Volta a ser GPIO em LOW: transistor cortado, falante mudo.
+    pinMode(PINO_SOM, OUTPUT);
+    digitalWrite(PINO_SOM, LOW);
+  } else {
+    tone(PINO_SOM, hz);
+  }
+  frequenciaTocando = hz;
 }
 
 void tratarDesconexao() {
   if (!avisoDesconexaoPendente || bleConectado) return;
   if (millis() - desconectouEm < AVISO_DESCONEXAO_MS) return;
   avisoDesconexaoPendente = false;
-  vibrador.iniciar(Padrao::PerdeuConexao, millis());
+  alertar(Padrao::PerdeuConexao, millis());
   mostrarEstado();
   Serial.println("[ble] aviso de desconexao vibrado");
 }
@@ -753,10 +928,10 @@ void tratarTela() {
 }
 
 bool botaoSeguradoNoBoot() {
-  if (digitalRead(PINO_BOTAO) != LOW) return false;
+  if (digitalRead(PINO_BOTAO_TELA) != LOW) return false;
   const unsigned long inicio = millis();
   while (millis() - inicio < BOOT_PAREAR_MS) {
-    if (digitalRead(PINO_BOTAO) != LOW) return false;
+    if (digitalRead(PINO_BOTAO_TELA) != LOW) return false;
     delay(10);
   }
   return true;
@@ -771,7 +946,11 @@ void setup() {
 
   pinMode(PINO_VIBRACAO, OUTPUT);
   digitalWrite(PINO_VIBRACAO, LOW);
-  pinMode(PINO_BOTAO, INPUT_PULLUP);
+  pinMode(PINO_SOM, OUTPUT);
+  digitalWrite(PINO_SOM, LOW);
+  pinMode(PINO_BOTAO_TELA, INPUT_PULLUP);
+  pinMode(PINO_BOTAO_SILENCIAR, INPUT_PULLUP);
+  pinMode(PINO_BOTAO_AJUDA, INPUT_PULLUP);
 
   const uint64_t mac = ESP.getEfuseMac();
   snprintf(nomeDispositivo, sizeof(nomeDispositivo), "hoodi Pet %02X%02X", (unsigned)((mac >> 32) & 0xFF),
@@ -799,9 +978,10 @@ void loop() {
 
   processarAvisosBle();
   lerSerial();
-  tratarBotao();
+  tratarBotoes();
   tratarDesconexao();
   digitalWrite(PINO_VIBRACAO, vibrador.atualizar(millis()) ? HIGH : LOW);
+  tocarFrequencia(som.atualizar(millis()));
   tratarTela();
   delay(5);
 }
