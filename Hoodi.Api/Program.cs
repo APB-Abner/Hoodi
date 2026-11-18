@@ -62,7 +62,7 @@ builder.Services.AddHttpClient<Hoodi.Application.Rotas.IProvedorRotas, Hoodi.Inf
     client.Timeout = TimeSpan.FromSeconds(15); client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddScoped<Hoodi.Application.Lugares.ILugares, Hoodi.Application.Lugares.LugaresService>();
-builder.Services.AddHttpClient<Hoodi.Application.Lugares.IProvedorLugares, Hoodi.Infrastructure.Rotas.HeigitPlacesProvider>(client =>
+builder.Services.AddHttpClient<Hoodi.Application.Lugares.IProvedorLugares, Hoodi.Infrastructure.Lugares.HeigitPlacesProvider>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(8); client.MaxResponseContentBufferSize = 512 * 1024;
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
