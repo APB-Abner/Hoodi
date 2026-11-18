@@ -40,5 +40,5 @@ public sealed class AvaliacaoRotasService(IGradeParaRotas grade, RouteScoring en
         MetrosTotal = Math.Round(p.MetrosTotal, 2, MidpointRounding.ToEven), MetrosComDado = Math.Round(p.MetrosComDado, 2, MidpointRounding.ToEven),
         PercentualSemDado = Round(p.PercentualSemDado), PercentualForaCobertura = Round(p.PercentualForaCobertura), CoberturaPercentual = Round(p.CoberturaPercentual) };
     private static double Round(double n) => Math.Round(n, 6, MidpointRounding.ToEven);
-    private const string Warning = "Índice histórico observado (jan–set/2026), demonstração não validada; não indica rota segura. SemDado=RiscoBaixo é uma hipótese de comparação, não evidência de risco baixo.";
+    private const string Warning = "Índice histórico observado (janela do snapshot vigente, ver manifest.janela_dados), demonstração não validada; não indica rota segura. SemDado=RiscoBaixo é uma hipótese de comparação, não evidência de risco baixo.";
 }

@@ -1,0 +1,31 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore Hoodi.slnx
+      - run: dotnet build Hoodi.slnx --no-restore -c Release -warnaserror
+      - run: dotnet test Hoodi.slnx --no-build -c Release
+      - name: pacotes NuGet vulneráveis (inclui dependências transitivas)
+        run: |
+          dotnet list Hoodi.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          if grep -q "has the following vulnerable packages" vuln.txt; then echo "pacote vulnerável"; exit 1; fi
+  contrato:
+    # O pacote do produtor (data/risk/v2 e v3) e o contrato OpenAPI continuam coerentes entre si.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pyyaml jsonschema
+      - run: python scripts/validate_risk_v2.py v2
+      - run: python scripts/validate_risk_v2.py v3

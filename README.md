@@ -213,9 +213,9 @@ O [OpenAPI incremental](contracts/v0.6/demo.openapi.yaml) descreve essas operaç
 
 
 
-## Grade H3 — pacote real v2
+## Grade H3 — pacote real v3 (v2 para rollback)
 
-A API valida o pacote de `data/risk/v2` e publica o snapshot atomicamente. `com_dado` exige pelo menos 3 registros; contagens 0–2 são publicadas como `sem_dado`, sem nível/pontuação e com contagem zero. `fora_cobertura` permanece separado. O centro informado pelo produtor ainda é provisório.
+A API valida o pacote de `data/risk/v3` (janela semestral abr–set/2026; o v2 jan–set segue aceito para rollback) e publica o snapshot atomicamente. `com_dado` exige pelo menos 3 registros; contagens 0–2 são publicadas como `sem_dado`, sem nível/pontuação e com contagem zero. `fora_cobertura` permanece separado. O centro informado pelo produtor ainda é provisório.
 
 As leituras públicas são `GET /v1/risco/versao-atual`, `GET /v1/risco/grade` (CSV completo) e `GET /v1/risco/celulas/{h3Cell}?faixa=0`. Antes da primeira importação, retornam 404 `SNAPSHOT_INDISPONIVEL`.
 
@@ -223,7 +223,7 @@ As três leituras compartilham limite de 120 pedidos/minuto por IP (429 no exces
 
 `POST /v1/admin/risco/importar` exige JWT válido e conta autorizada em `Risk__ImporterUserIds__0`; a lista padrão é vazia. A importação verifica os hashes aprovados de CSV, manifesto e fixture. Primeiro sucesso retorna 201; repetição idêntica retorna 200. Uma falha preserva a publicação anterior. O início da API não publica automaticamente o pacote.
 
-O app precisa adotar o [contrato incremental H3](contracts/v0.6/risk.openapi.yaml), que substitui o antigo desenho de geohash/JSON paginado por CSV histórico completo. Veja [o procedimento de importação e consumo](docs/risk-snapshot-v2-integration.md). Validação dos artefatos e contrato: `python scripts/validate_risk_v2.py` (também com `python -O`). O produtor, commit e hashes estão em [SOURCE.md](data/risk/v2/SOURCE.md).
+O app precisa adotar o [contrato incremental H3](contracts/v0.6/risk.openapi.yaml), que substitui o antigo desenho de geohash/JSON paginado por CSV histórico completo. Veja [o procedimento de importação e consumo](docs/risk-snapshot-v2-integration.md). Validação dos artefatos e contrato: `python scripts/validate_risk_v2.py v3` (ou `v2`; também com `python -O`). O produtor e os hashes estão em [SOURCE.md](data/risk/v3/SOURCE.md) (v2: [SOURCE.md](data/risk/v2/SOURCE.md)).
 
 
 
