@@ -51,9 +51,10 @@ infra/scripts/06_smoke_api.sh https://SEU_HOST
 
 Confere saúde, cabeçalhos de segurança, endpoints protegidos (401 sem token) e CORS fechado.
 
+A versão da API vem de `<Version>` no `Hoodi.Api.csproj`, lida dos metadados do assembly por `ApiInfo`. `/health`, OpenAPI gerado e o contrato atual `contracts/openapi.yaml` usam essa versão. Validar a consolidação com `python scripts/validate_api_contract.py`; a v0.5.3 está preservada em `contracts/baseline/openapi.v0.5.3.yaml`.
+
 ## Pendências conhecidas (não resolvidas por código)
 
 - Licença e termos de uso do dado SSP-SP: confirmar se a redistribuição agregada em H3 é permitida (dono: Fernando).
 - Autenticação do frame BLE do Pet: protótipo, sem assinatura (dono: hardware/Fernando).
 - Backup e restauração: procedimento descrito, não ensaiado.
-- `contracts/openapi.yaml` está em 0.5.3 e a API em 0.6.0-draft; o `/health` e o OpenAPI gerado já usam a mesma constante `ApiInfo.Versao`.

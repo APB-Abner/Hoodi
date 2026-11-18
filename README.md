@@ -149,6 +149,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
+python scripts/validate_api_contract.py
 dotnet ef migrations has-pending-model-changes --project Hoodi.Infrastructure --startup-project Hoodi.Api -- --environment Development
 ```
 
@@ -158,7 +159,7 @@ Os testes usam dados sintéticos, arquivos SQLite isolados, migration real e rel
 
 A recriação de host automatizada não prova o teste de falha Linux; esse teste foi executado na VM: encerramento do processo com `kill -9` e reinício pelo systemd, nginx no modo HTTP de demonstração, permissões do EnvironmentFile e envio pelo Mailpit (evidências em [infra/README.md](infra/README.md#evidências)). Continuam pendentes o nginx com TLS real (domínio e certificado) e a integração dos deep links no app.
 
-A baseline v0.5.1 foi preservada. O patch v0.5.2 definiu o resgate de convites; a v0.5.3 acrescenta normalização e respostas 400. A v0.6 ainda precisa implementar o snapshot H3 resolução 9 definido no [registro do produtor](docs/risk-snapshot-v1-v0.6.md), usando o CSV completo, manifesto e fixture reais.
+As baselines v0.5.1, v0.5.2 e v0.5.3 foram preservadas. O contrato atual consolida os incrementos v0.6 de logout, conta/pânico, grade H3 e rotas; os artefatos reais do produtor estão em `data/risk/v2`.
 
 Referências de configuração: [proxy e forwarded headers](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0) e [persistência de chaves do Data Protection](https://learn.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/overview?view=aspnetcore-10.0).
 
@@ -174,7 +175,7 @@ A validade padrão do convite é de 60 minutos, configurável por `Contatos__Val
 Os endpoints de tokens Expo registram, atualizam, reativam e desativam associações autenticadas. Eles ainda não enviam notificações nem consultam receipts do Expo.
 
 
-O [OpenAPI v0.5.3](contracts/openapi.yaml) preserva a [baseline v0.5.1](contracts/baseline/openapi.v0.5.1.yaml) e a [v0.5.2](contracts/baseline/openapi.v0.5.2.yaml), acrescentando normalização dos códigos e respostas 400 conforme o [changelog v0.5.3](docs/CHANGELOG_v0.5.3.md). O contrato completo inclui operações ainda pendentes; o Scalar mostra as implementadas.
+O [OpenAPI atual](contracts/openapi.yaml) consolida o contrato de projeto em `0.6.0-draft`, com referências aos incrementos de logout, conta/pânico, H3 e rotas. A [v0.5.3](contracts/baseline/openapi.v0.5.3.yaml), a [v0.5.2](contracts/baseline/openapi.v0.5.2.yaml) e a [v0.5.1](contracts/baseline/openapi.v0.5.1.yaml) permanecem preservadas. O contrato de projeto inclui operações ainda pendentes; o Scalar mostra as implementadas. A versão vem de `<Version>` no `.csproj`, compartilhada com `/health` e o OpenAPI gerado. Veja [versionamento e validação](docs/api-version-contract.md).
 
 Convites rejeitados deixam de aparecer na lista de pendentes do emissor. O contrato não promete esconder o encerramento do convite.
 

@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "contracts/baseline/openapi.v0.5.1.yaml"
 PREVIOUS = ROOT / "contracts/baseline/openapi.v0.5.2.yaml"
-PATCH = ROOT / "contracts/openapi.yaml"
+PATCH = ROOT / "contracts/baseline/openapi.v0.5.3.yaml"
 REDEEM = "/v1/contatos/convites/resgatar"
 
 

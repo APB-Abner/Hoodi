@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using Hoodi.Api.Auth;
 using Microsoft.AspNetCore.Hosting;
@@ -74,6 +75,8 @@ public sealed class ProducaoHardeningTests
         var client = host.CreateClient();
         using var health = JsonDocument.Parse(await client.GetStringAsync("/health"));
         using var openapi = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var assemblyVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        Assert.Equal(assemblyVersion, health.RootElement.GetProperty("versaoApi").GetString());
         Assert.Equal(openapi.RootElement.GetProperty("info").GetProperty("version").GetString(),
             health.RootElement.GetProperty("versaoApi").GetString());
     }

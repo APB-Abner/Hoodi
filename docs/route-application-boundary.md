@@ -33,7 +33,9 @@ The PR #7 security header middleware owns the default `Cache-Control: no-store`
 policy, including documentation and exception responses. Explicit endpoint cache
 headers remain authoritative. The exception middleware only translates/logs errors.
 API version metadata lives in `Hoodi.Api.Configuration.ApiInfo`, in its own file,
-independently of the security header middleware. Health and OpenAPI share this value.
+independently of the security header middleware. It reads assembly metadata generated
+from the API project's `Version`; health and OpenAPI share this value. The current
+design contract is generated from that same version and the preserved source contracts.
 
 ## Deliberately deferred
 
