@@ -93,7 +93,12 @@ public sealed class ProducerV2IntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
         using (var scope = factory.Services.CreateScope()) scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value.ImporterUserIds = [user];
         // Defaults are the v2 release; v3 (phase 2) is refused until its hashes are approved explicitly (Risk__Approved*).
-        if (contract == 3) Assert.NotEqual(HttpStatusCode.Created, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
+        if (contract == 3)
+        {
+            var refused = await op.PostAsync("/v1/admin/risco/importar", Upload(contract));
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+            Assert.Contains("ARTEFATO_NAO_APROVADO", await refused.Content.ReadAsStringAsync());
+        }
         if (contract == 3)
         {
             using var scope = factory.Services.CreateScope(); var risk = scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value;
