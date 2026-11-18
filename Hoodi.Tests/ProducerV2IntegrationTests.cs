@@ -91,11 +91,13 @@ public sealed class ProducerV2IntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await publicClient.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
         var user = await PanicoAndContaIntegrationTests.Seed(factory, op, "operator");
         Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
-        using (var scope = factory.Services.CreateScope())
+        using (var scope = factory.Services.CreateScope()) scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value.ImporterUserIds = [user];
+        // Defaults are the v2 release; v3 (phase 2) is refused until its hashes are approved explicitly (Risk__Approved*).
+        if (contract == 3) Assert.NotEqual(HttpStatusCode.Created, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
+        if (contract == 3)
         {
-            var risk = scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value; risk.ImporterUserIds = [user];
-            // Defaults are the v2 release; v3 (phase 2) must be approved explicitly (Risk__Approved*).
-            if (contract == 3) { risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256V3; risk.ApprovedManifestSha256 = Sha(Bytes(3, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(3, "fixture_v3.json")); }
+            using var scope = factory.Services.CreateScope(); var risk = scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value;
+            risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256V3; risk.ApprovedManifestSha256 = Sha(Bytes(3, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(3, "fixture_v3.json"));
         }
         Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: contract == 2 ? "nando-v3-2026-abr-set" : "nando-v2-2026-jan-set"))).StatusCode);
 Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: "nando-v2-v3-2026"))).StatusCode);
