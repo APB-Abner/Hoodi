@@ -1,0 +1,49 @@
+# Gate de privacidade do hoodi (Cybersecurity — GS 2026.2)
+# Bloqueia o merge quando um dado pessoal chega a uma saída insegura no código da API.
+name: security-pii
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pii-taint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Semgrep (versão fixa em security/requirements.txt)
+        run: bash security/scripts/setup.sh
+
+      - name: Prova de que o gate funciona (o protótipo vulnerável DEVE ser bloqueado)
+        run: |
+          if security/.venv/bin/semgrep scan --config security/rules --metrics=off --quiet \
+               --severity ERROR --error security/fixtures/LeakyPrototype > /dev/null; then
+            echo "::error::As regras não detectaram os vazamentos do protótipo."
+            exit 1
+          fi
+          echo "Protótipo vulnerável bloqueado, como esperado."
+
+      - name: Auditoria completa + bloqueio de vazamento na API
+        # Sem chave de IA no CI: os alertas usam templates. Sai com código 2 se houver ERROR na API.
+        run: bash security/scripts/run_audit.sh --offline
+
+      - name: Publicar dashboard e evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risco-cidadao
+          path: |
+            security/dashboard/index.html
+            security/evidence/
+          retention-days: 14

@@ -1,0 +1,3 @@
+  Scanning 1 file with 8 csharp rules.
+14/14: ✓ All tests passed
+No tests for fixes found.
