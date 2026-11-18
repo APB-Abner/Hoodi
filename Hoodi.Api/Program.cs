@@ -132,7 +132,7 @@ builder.Services.AddOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions
     var origens = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
     options.AddDefaultPolicy(policy =>
     {
-        if (origens.Length > 0) policy.WithOrigins(origens).WithMethods("GET", "POST", "DELETE").WithHeaders("Authorization", "Content-Type");
+        if (origens.Length > 0) policy.WithOrigins(origens).WithMethods("GET", "POST", "PUT", "DELETE").WithHeaders("Authorization", "Content-Type");
     });
 });
 builder.Services.AddHttpsRedirection(options => options.HttpsPort = builder.Configuration.GetValue("Https:Port", 443));

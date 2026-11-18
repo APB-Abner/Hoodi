@@ -9,6 +9,18 @@ namespace Hoodi.Infrastructure.Risk;
 public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapshotDecoder
 {
     public const string DeliveredSha256 = "2dddef701bdecb65142874980f1ae5aba7b2ac6ab2abad5c47b07f07ecc5080a";
+    public const string DeliveredSha256V3 = "e33bd004ffcf0c47378ef0c9518bdf19a9ea84ca007222d798a2003a7c71c0da";
+    private const string FormulaTail = " meses ÷ horas da faixa (6,6,6,3,3). Pesos: furto, tráfico, drogas para consumo, lesão culposa no trânsito 1; roubo, lesão corporal 3; homicídio, feminicídio, estupro 5; demais rubricas sem peso.";
+    private const string NatureTail = "; não é previsão. O backtest do classificador é um experimento retrospectivo à parte.";
+    // Contrato 2: jan–set/2026 (9 meses). Contrato 3: janela semestral abr–set/2026 (6 meses). Mesmo esquema de CSV e mesmas regras.
+    private static readonly Dictionary<int, (string[] Window, string Formula, string Nature)> Rules = new()
+    {
+        [2] = (["2026-01-01", "2026-09-30"], "pontuacao_mensal = (soma dos pesos dos registros da chave em jan–set) ÷ 9" + FormulaTail, "Mapa histórico observado (jan–set 2026)" + NatureTail),
+        [3] = (["2026-04-01", "2026-09-30"], "pontuacao_mensal = (soma dos pesos dos registros da chave em abr–set) ÷ 6" + FormulaTail, "Mapa histórico observado (abr–set 2026)" + NatureTail),
+    };
+    /// <summary>Nome do CSV no contrato dado: risco_h3_faixa_v{N}.csv.</summary>
+    public static string CsvName(int contractVersion) => $"risco_h3_faixa_v{contractVersion}.csv";
+    public static bool IsKnownContract(int contractVersion) => Rules.ContainsKey(contractVersion);
     public const string Warning = "Melhor dado disponível no período. Não indica tempo real nem local seguro.";
     private const string Header = "h3_cell,faixa,faixa_nome,status,nivel,pontuacao_mensal,n_registros";
 
@@ -25,16 +37,17 @@ public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapsho
         using var fixture = JsonDocument.Parse(package.FixtureBytes);
         RejectDuplicateProperties(manifest.RootElement); RejectDuplicateProperties(fixture.RootElement);
         var m = manifest.RootElement; var f = fixture.RootElement;
-        Require(m.GetProperty("contrato_versao").GetInt32() == 2 && f.GetProperty("contrato_versao").GetInt32() == 2, "VERSAO_CONTRATO_INVALIDA");
+        var version = m.GetProperty("contrato_versao").GetInt32();
+        Require(Rules.TryGetValue(version, out var rules) && f.GetProperty("contrato_versao").GetInt32() == version, "VERSAO_CONTRATO_INVALIDA");
         Require(m.GetProperty("h3_resolucao").GetInt32() == 9 && m.GetProperty("fuso").GetString() == FaixasRisco.Fuso, "REFERENCIA_INVALIDA");
         Require(m.GetProperty("aviso").GetString() == Warning, "AVISO_INVALIDO");
         Require(m.GetProperty("fonte").GetProperty("orgao").GetString() == "SSP-SP" &&
             m.GetProperty("fonte").GetProperty("arquivo").GetString() == "SPDadosCriminais_2026.xlsx" &&
             System.Text.RegularExpressions.Regex.IsMatch(m.GetProperty("fonte").GetProperty("sha256").GetString() ?? "", "\\A[0-9a-f]{64}\\z"), "FONTE_INVALIDA");
-        Require(m.GetProperty("formula_pontuacao").GetString() == "pontuacao_mensal = (soma dos pesos dos registros da chave em jan–set) ÷ 9 meses ÷ horas da faixa (6,6,6,3,3). Pesos: furto, tráfico, drogas para consumo, lesão culposa no trânsito 1; roubo, lesão corporal 3; homicídio, feminicídio, estupro 5; demais rubricas sem peso.", "FORMULA_INVALIDA");
-        Require(m.GetProperty("natureza").GetString() == "Mapa histórico observado (jan–set 2026); não é previsão. O backtest do classificador é um experimento retrospectivo à parte.", "NATUREZA_INVALIDA");
+        Require(m.GetProperty("formula_pontuacao").GetString() == rules.Formula, "FORMULA_INVALIDA");
+        Require(m.GetProperty("natureza").GetString() == rules.Nature, "NATUREZA_INVALIDA");
         Require(DateTimeOffset.TryParse(m.GetProperty("gerado_em").GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out _), "DATA_GERACAO_INVALIDA");
-        Require(m.GetProperty("janela_dados").EnumerateArray().Select(x => x.GetString()).SequenceEqual(new[] { "2026-01-01", "2026-09-30" }), "JANELA_INVALIDA");
+        Require(m.GetProperty("janela_dados").EnumerateArray().Select(x => x.GetString()).SequenceEqual(rules.Window), "JANELA_INVALIDA");
         Require(m.GetProperty("csv_sha256").GetString() == Convert.ToHexString(SHA256.HashData(package.CsvBytes)).ToLowerInvariant(), "CHECKSUM_INVALIDO");
         Require(m.GetProperty("privacidade").GetProperty("k_minimo").GetInt32() == 3, "PRIVACIDADE_INVALIDA");
         var bands = m.GetProperty("faixas").EnumerateArray().ToArray();

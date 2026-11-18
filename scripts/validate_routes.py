@@ -6,15 +6,20 @@ import yaml
 from jsonschema import Draft202012Validator
 
 root = Path(__file__).resolve().parents[1]
-folder = root / "data/routes/v2"
-vectors = (folder / "vetores_rota_v2.json").read_bytes()
-sha = hashlib.sha256(vectors).hexdigest()
+VERSIONS = {
+    2: ("data/routes/v2", "vetores_rota_v2.json", "data/risk/v2/manifest.json", "93b1980b88eecae77c744bc4b78084b3d6eb26ae3484908d5c077d4b656fac84"),
+    3: ("data/routes/v3", "vetores_rota_v3.json", "data/risk/v3/manifest.json", "47bc78f8adc2ceb7dec46be5cc5539b032cfa3dae00e9b0d14dbad21cc19798a"),
+}
 def require(value, message):
     if not value:
         raise ValueError(message)
-require(sha == "93b1980b88eecae77c744bc4b78084b3d6eb26ae3484908d5c077d4b656fac84", "Producer vectors changed")
-require((folder / "vetores_rota_v2.json.sha256").read_text().split()[0] == sha, "Vector checksum differs")
-require(json.loads(vectors)["snapshot_csv_sha256"] == json.loads((root / "data/risk/v2/manifest.json").read_bytes())["csv_sha256"], "Vector/snapshot mismatch")
+for contract, (folder_name, name, manifest_path, expected) in VERSIONS.items():
+    folder = root / folder_name
+    vectors = (folder / name).read_bytes()
+    sha = hashlib.sha256(vectors).hexdigest()
+    require(sha == expected, f"Producer vectors v{contract} changed")
+    require((folder / (name + ".sha256")).read_text().split()[0] == sha, f"Vector v{contract} checksum differs")
+    require(json.loads(vectors)["snapshot_csv_sha256"] == json.loads((root / manifest_path).read_bytes())["csv_sha256"], f"Vector/snapshot v{contract} mismatch")
 spec = yaml.safe_load((root / "contracts/v0.6/routes.openapi.yaml").read_text(encoding="utf-8"))
 def refs(value):
     if isinstance(value, dict):

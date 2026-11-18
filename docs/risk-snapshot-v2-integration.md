@@ -1,4 +1,8 @@
-# Risk snapshot v2 integration
+# Risk snapshot integration (contract v2 and v3)
+
+> **Current release: contract v2** (`data/risk/v2`, Jan–Sep 2026), the one closed for delivery and the default hashes. The v3 semestral package (`data/risk/v3`, Apr–Sep 2026, same 5×5 km perimeter, same CSV schema, k ≥ 3) is accepted by the decoder for phase 2 only. The decoder reads `contrato_versao` from the manifest and applies that version's exact window, formula and nature text; any other value is rejected. v2 has 954 `com_dado` and 441 `sem_dado` keys; v3 has 824/571 (less coverage). Hashes: [data/risk/v2/SOURCE.md](../data/risk/v2/SOURCE.md) and [data/risk/v3/SOURCE.md](../data/risk/v3/SOURCE.md). Route vectors exist for both releases (`data/routes/v2`, `data/routes/v3`) and `validate_routes.py` checks each against its own snapshot hash.
+
+The sections below describe the shared mechanism; examples use the v2 file names. To import v3 in phase 2, replace `v2` by `v3`, `nando-v2-2026-jan-set` by `nando-v3-2026-abr-set`, and set the three `Risk__Approved*` hashes from `data/risk/v3/SOURCE.md`.
 
 ## Contract and provenance
 
@@ -8,7 +12,7 @@ The delivered producer v2 supersedes the historical [v1 decision record](risk-sn
 
 ## Validation
 
-`pocketken.H3` **4.5.0** and NetTopologySuite are managed libraries, without native H3 installation on the VM. The adapter checks actual H3 validity/resolution and independently generates expected cells from the manifest rectangle by cell-boundary intersection. Tests establish exact equality with the producer's overlap release: **279 cells × 5 bands = 1,395 rows**. This local WGS84 geometry is not a general polar/antimeridian polygon API.
+`pocketken.H3` **4.5.0** and NetTopologySuite are managed libraries, without native H3 installation on the VM. The adapter checks actual H3 validity/resolution and independently generates expected cells from the manifest rectangle by cell-boundary intersection. Tests establish exact equality with the producer's overlap release (v2 and v3): **279 cells × 5 bands = 1,395 rows**. This local WGS84 geometry is not a general polar/antimeridian polygon API.
 
 Checks include exact SHA bytes, strict UTF-8/LF/header/order, duplicate keys, five bands per expected cell, period/timezone/bands/source/formula/privacy metadata, levels versus manifest training cuts and exact fixture membership across all levels plus sem_dado. Published counts plus suppressed counts must not exceed total source records used; the latter includes unweighted rubrics. Validation does not rerun ML or independently authenticate the raw SSP file.
 
@@ -18,7 +22,7 @@ Production import additionally pins approved CSV, manifest and fixture hashes. A
 
 The operator needs a valid authenticated session and its account ID in `Risk__ImporterUserIds__0` (additional entries `__1`, etc.). Default is empty: normal users cannot publish. Configure the VM and restart first. Do not enable import for every JWT user.
 
-The supplied release's approved hashes are defaults. Updating `Risk__ApprovedCsvSha256`, `Risk__ApprovedManifestSha256` and `Risk__ApprovedFixtureSha256` requires a reviewed producer release and restart. A changed `gerado_em` changes the manifest hash even with the same CSV. Hashes are public integrity metadata, not credentials.
+The v2 release's approved hashes are the defaults (v3 hashes are set explicitly for phase 2). Updating `Risk__ApprovedCsvSha256`, `Risk__ApprovedManifestSha256` and `Risk__ApprovedFixtureSha256` requires a reviewed producer release and restart. A changed `gerado_em` changes the manifest hash even with the same CSV. Hashes are public integrity metadata, not credentials.
 
 With the supplied files available from the repository:
 
@@ -51,3 +55,8 @@ Cell lookup uses a process-local immutable dictionary keyed by `(h3_cell, faixa)
 The three public read routes share a fixed-window quota of **120 requests per minute per client IP**, with no queue; excess returns 429 `LIMITE_TENTATIVAS`. Trusted forwarded headers run before this limiter. The quota and cache are in-process and reset at restart, consistent with the current single-instance deployment. Metadata and CSV reads retain their existing behavior; the cell hot path avoids full-artifact reads and geometric work.
 
 Tests record actual SQLite command projections on warm lookup, verify one decode for concurrent cold requests, refresh with the same CSV hash under a new version, rejection/retry after failed refresh, and separate forwarded-client IP quotas. The producer's provisional center remains unchanged; a finalized perimeter requires a newly reviewed package/hashes and import, never an in-place edit of the approved files.
+
+## Open items for v3 (phase 2)
+
+- v3 is not the default: its semestral window was picked in an exploratory test (Aug–Sep 2026 already seen) and it covers fewer keys (824 vs 954 `com_dado`). The definitive check is the blind test on Oct–Nov 2026 data.
+- Enabling v3: set `Risk__ApprovedCsvSha256`, `Risk__ApprovedManifestSha256`, `Risk__ApprovedFixtureSha256` to the v3 values, restart, import with the v3 files and a new `versao` label. Replaying an older version does not rewind the head.

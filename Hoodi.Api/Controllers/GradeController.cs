@@ -34,7 +34,8 @@ public sealed class GradeController(ISnapshotPublicationStore store, IProducerSn
     {
         var s = await Current(ct); var etag = '"' + s.Sha256 + '"'; Response.Headers.ETag = etag;
         if (Request.Headers.IfNoneMatch.Any(value => value?.Split(',').Select(x => x.Trim()).Contains(etag) == true)) return StatusCode(304);
-        return File(s.CsvBytes, "text/csv; charset=utf-8", "risco_h3_faixa_v2.csv");
+        using var manifest = JsonDocument.Parse(s.ManifestBytes);
+        return File(s.CsvBytes, "text/csv; charset=utf-8", ProducerV2Decoder.CsvName(manifest.RootElement.GetProperty("contrato_versao").GetInt32()));
     }
     [HttpGet("celulas/{h3Cell}")]
     [ProducesResponseType<GradeCell>(200)]
@@ -70,9 +71,14 @@ public sealed class GradeImportController(SnapshotImportService importer, IOptio
         var csv = await Read(input.Csv, 900000, ct); var manifest = await Read(input.Manifest, 64000, ct);
         var fixture = await Read(input.Fixture, 64000, ct); var checksum = Encoding.UTF8.GetString(await Read(input.Sha256, 256, ct)).Trim();
         var parts = checksum.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 || parts[1] != "risco_h3_faixa_v2.csv") throw new RequestException("CHECKSUM_ARQUIVO_INVALIDO", 400);
+        if (parts.Length != 2 || !new[] { 2, 3 }.Any(v => parts[1] == ProducerV2Decoder.CsvName(v))) throw new RequestException("CHECKSUM_ARQUIVO_INVALIDO", 400);
         if (Hash(csv) != options.Value.ApprovedCsvSha256 || Hash(manifest) != options.Value.ApprovedManifestSha256 || Hash(fixture) != options.Value.ApprovedFixtureSha256)
             throw new SnapshotValidationException("ARTEFATO_NAO_APROVADO");
+        var contrato = new[] { 2, 3 }.First(v => parts[1] == ProducerV2Decoder.CsvName(v));
+        // O rótulo traz exatamente um token de versão e ele é o do contrato (nada de "v2-v3").
+        var tokens = System.Text.RegularExpressions.Regex.Matches(input.Versao, @"(?<![0-9a-z])v([0-9]+)(?![0-9])", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (tokens.Count != 1 || tokens[0].Groups[1].Value != contrato.ToString())
+            throw new RequestException("VERSAO_DIVERGE_DO_CONTRATO", 400);
         var result = await importer.ImportAsync(new(input.Versao, parts[0], csv, manifest, fixture), ct);
         return StatusCode(result.AlreadyPublished ? 200 : 201, result);
     }

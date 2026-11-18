@@ -1,5 +1,6 @@
 namespace Hoodi.Infrastructure.Risk;
 
+/// <summary>Defaults = pacote do produtor contrato v2 (data/risk/v2), o fechado na entrega. O v3 semestral (data/risk/v3) é aceito pelo decoder para a fase 2, aprovando seus hashes via Risk__Approved*.</summary>
 public sealed class RiskSnapshotOptions
 {
     public Guid[] ImporterUserIds { get; set; } = [];

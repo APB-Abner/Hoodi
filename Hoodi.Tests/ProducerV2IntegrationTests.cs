@@ -15,19 +15,36 @@ namespace Hoodi.Tests;
 
 public sealed class ProducerV2IntegrationTests
 {
-    [Fact]
-    public async Task RealProducerPackage_MustValidateExactOverlapCoverageAndAll1395Rows()
+    [Theory]
+    [InlineData(2, 954, 441)]
+    [InlineData(3, 824, 571)]
+    public async Task RealProducerPackage_MustValidateExactOverlapCoverageAndAll1395Rows(int contract, int withData, int noData)
     {
         var spatial = new H3SpatialIndex(); var decoder = new ProducerV2Decoder(spatial);
-        var snapshot = await decoder.DecodeAsync(Package(), default);
+        var snapshot = await decoder.DecodeAsync(Package(contract), default);
         Assert.Equal(279, snapshot.ExpectedCoverage.Count); Assert.Equal(1395, snapshot.Cells.Count);
-        Assert.Equal(954, snapshot.Cells.Count(x => x.Status == "com_dado"));
-        Assert.Equal(441, snapshot.Cells.Count(x => x.Status == "sem_dado"));
+        Assert.Equal(withData, snapshot.Cells.Count(x => x.Status == "com_dado"));
+        Assert.Equal(noData, snapshot.Cells.Count(x => x.Status == "sem_dado"));
         Assert.All(snapshot.Cells.Where(x => x.Status == "com_dado"), x => Assert.True(x.RecordCount >= 3));
         Assert.All(snapshot.Cells.Where(x => x.Status == "sem_dado"), x => { Assert.Null(x.Level); Assert.Null(x.MonthlyScore); Assert.Equal(0, x.RecordCount); });
         Assert.True(spatial.IsValidResolution9("89a8100c00bffff"));
         Assert.False(spatial.IsValidResolution9("89fffffffffffff"));
         Assert.False(spatial.IsValidResolution9("88a8100c01fffff"));
+    }
+
+    [Theory]
+    [InlineData(2, "abr–set", "VERSAO_OU_FORMULA")]
+    [InlineData(3, "jan–set", "VERSAO_OU_FORMULA")]
+    public async Task RealDecoder_MustRejectWindowOrFormulaFromAnotherContractVersion(int contract, string otherWindow, string _)
+    {
+        var package = Package(contract); var manifest = JsonNode.Parse(package.ManifestBytes)!;
+        var own = contract == 2 ? "jan–set" : "abr–set";
+        manifest["formula_pontuacao"] = manifest["formula_pontuacao"]!.GetValue<string>().Replace(own, otherWindow);
+        package = package with { ManifestBytes = Encoding.UTF8.GetBytes(manifest.ToJsonString()) };
+        await Assert.ThrowsAsync<SnapshotValidationException>(() => new ProducerV2Decoder(new H3SpatialIndex()).DecodeAsync(package, default));
+        var unknown = JsonNode.Parse(Package(contract).ManifestBytes)!; unknown["contrato_versao"] = 4;
+        await Assert.ThrowsAsync<SnapshotValidationException>(() => new ProducerV2Decoder(new H3SpatialIndex())
+            .DecodeAsync(Package(contract) with { ManifestBytes = Encoding.UTF8.GetBytes(unknown.ToJsonString()) }, default));
     }
 
     [Theory]
@@ -63,21 +80,38 @@ public sealed class ProducerV2IntegrationTests
         await Assert.ThrowsAsync<SnapshotValidationException>(() => new ProducerV2Decoder(new H3SpatialIndex()).DecodeAsync(package, default));
     }
 
-    [Fact]
-    public async Task HttpImport_MustRequireOperatorAndPublishAtomically_WithExplicitOutsideCoverage()
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task HttpImport_MustRequireOperatorAndPublishAtomically_WithExplicitOutsideCoverage(int contract)
     {
+        var sha = contract == 2 ? ProducerV2Decoder.DeliveredSha256 : ProducerV2Decoder.DeliveredSha256V3;
         using var factory = new AuthFactory(); using var op = factory.Client(); using var publicClient = factory.Client();
         Assert.Equal(HttpStatusCode.NotFound, (await publicClient.GetAsync("/v1/risco/grade")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await publicClient.PostAsync("/v1/admin/risco/importar", Upload())).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await publicClient.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
         var user = await PanicoAndContaIntegrationTests.Seed(factory, op, "operator");
-        Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsync("/v1/admin/risco/importar", Upload())).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract))).StatusCode);
         using (var scope = factory.Services.CreateScope()) scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value.ImporterUserIds = [user];
-        var imported = await op.PostAsync("/v1/admin/risco/importar", Upload());
+        // Defaults are the v2 release; v3 (phase 2) is refused until its hashes are approved explicitly (Risk__Approved*).
+        if (contract == 3)
+        {
+            var refused = await op.PostAsync("/v1/admin/risco/importar", Upload(contract));
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+            Assert.Contains("ARTEFATO_NAO_APROVADO", await refused.Content.ReadAsStringAsync());
+        }
+        if (contract == 3)
+        {
+            using var scope = factory.Services.CreateScope(); var risk = scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value;
+            risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256V3; risk.ApprovedManifestSha256 = Sha(Bytes(3, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(3, "fixture_v3.json"));
+        }
+        Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: contract == 2 ? "nando-v3-2026-abr-set" : "nando-v2-2026-jan-set"))).StatusCode);
+Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: "nando-v2-v3-2026"))).StatusCode);
+        var imported = await op.PostAsync("/v1/admin/risco/importar", Upload(contract));
         Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
         Assert.False((await imported.Content.ReadFromJsonAsync<PublicationResult>())!.AlreadyPublished);
-        Assert.True((await (await op.PostAsync("/v1/admin/risco/importar", Upload())).Content.ReadFromJsonAsync<PublicationResult>())!.AlreadyPublished);
-        var bytes = await publicClient.GetByteArrayAsync("/v1/risco/grade"); Assert.Equal(Package().CsvBytes, bytes);
-        var metadata = (await publicClient.GetFromJsonAsync<GradeMetadata>("/v1/risco/versao-atual"))!; Assert.Equal(ProducerV2Decoder.DeliveredSha256, metadata.Sha256);
+        Assert.True((await (await op.PostAsync("/v1/admin/risco/importar", Upload(contract))).Content.ReadFromJsonAsync<PublicationResult>())!.AlreadyPublished);
+        var bytes = await publicClient.GetByteArrayAsync("/v1/risco/grade"); Assert.Equal(Package(contract).CsvBytes, bytes);
+        var metadata = (await publicClient.GetFromJsonAsync<GradeMetadata>("/v1/risco/versao-atual"))!; Assert.Equal(sha, metadata.Sha256);
         var empty = (await publicClient.GetFromJsonAsync<GradeCell>("/v1/risco/celulas/89a8100c00bffff?faixa=0"))!;
         Assert.Equal("sem_dado", empty.Status); Assert.Null(empty.Nivel); Assert.Equal(0, empty.NRegistros);
         var outside = (await publicClient.GetFromJsonAsync<GradeCell>("/v1/risco/celulas/8928308280fffff?faixa=0"))!;
@@ -86,22 +120,24 @@ public sealed class ProducerV2IntegrationTests
         Assert.Equal("com_dado", known.Status); Assert.Equal(3, known.Nivel);
         Assert.Equal(HttpStatusCode.BadRequest, (await publicClient.GetAsync("/v1/risco/celulas/89fffffffffffff?faixa=0")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await publicClient.GetAsync("/v1/risco/celulas/89a8100c033ffff")).StatusCode);
-        var rejected = await op.PostAsync("/v1/admin/risco/importar", Upload(tamper: true)); Assert.Equal(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
+        var rejected = await op.PostAsync("/v1/admin/risco/importar", Upload(contract, tamper: true)); Assert.Equal(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
         Assert.Equal(bytes, await publicClient.GetByteArrayAsync("/v1/risco/grade"));
         using var check = factory.Services.CreateScope(); Assert.Single(await check.ServiceProvider.GetRequiredService<HoodiDbContext>().SnapshotPublications.ToListAsync());
         using var etagRequest = new HttpRequestMessage(HttpMethod.Get, "/v1/risco/grade");
-        etagRequest.Headers.IfNoneMatch.ParseAdd('"' + ProducerV2Decoder.DeliveredSha256 + '"');
+        etagRequest.Headers.IfNoneMatch.ParseAdd('"' + sha + '"');
         Assert.Equal(HttpStatusCode.NotModified, (await publicClient.SendAsync(etagRequest)).StatusCode);
     }
-    private static SnapshotPackage Package() => new("nando-v2-2026-jan-set", ProducerV2Decoder.DeliveredSha256,
-        Bytes("risco_h3_faixa_v2.csv"), Bytes("manifest.json"), Bytes("fixture_v2.json"));
-    private static byte[] Bytes(string name) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "RiskFixture", name));
-    private static MultipartFormDataContent Upload(bool tamper = false)
+    private static SnapshotPackage Package(int contract = 2) => new(contract == 2 ? "nando-v2-2026-jan-set" : "nando-v3-2026-abr-set",
+        contract == 2 ? ProducerV2Decoder.DeliveredSha256 : ProducerV2Decoder.DeliveredSha256V3,
+        Bytes(contract, $"risco_h3_faixa_v{contract}.csv"), Bytes(contract, "manifest.json"), Bytes(contract, $"fixture_v{contract}.json"));
+    private static byte[] Bytes(int contract, string name) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, contract == 2 ? "RiskFixture" : "RiskFixtureV3", name));
+    private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    private static MultipartFormDataContent Upload(int contract = 2, bool tamper = false, string? label = null)
     {
-        var content = new MultipartFormDataContent(); content.Add(new StringContent("nando-v2-2026-jan-set"), "versao");
-        foreach (var (field, name) in new[] { ("csv", "risco_h3_faixa_v2.csv"), ("sha256", "risco_h3_faixa_v2.csv.sha256"), ("manifest", "manifest.json"), ("fixture", "fixture_v2.json") })
+        var content = new MultipartFormDataContent(); content.Add(new StringContent(label ?? (contract == 2 ? "nando-v2-2026-jan-set" : "nando-v3-2026-abr-set")), "versao");
+        foreach (var (field, name) in new[] { ("csv", $"risco_h3_faixa_v{contract}.csv"), ("sha256", $"risco_h3_faixa_v{contract}.csv.sha256"), ("manifest", "manifest.json"), ("fixture", $"fixture_v{contract}.json") })
         {
-            var bytes = Bytes(name); if (tamper && field == "csv") bytes[0] ^= 1;
+            var bytes = Bytes(contract, name); if (tamper && field == "csv") bytes[0] ^= 1;
             content.Add(new ByteArrayContent(bytes), field, name);
         }
         return content;
