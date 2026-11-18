@@ -38,7 +38,7 @@ public sealed class AutenticacaoController(IAutenticacaoService auth, Hoodi.Api.
         return Ok(await auth.LoginAsync(entrada, ct));
     }
 
-    [HttpPost("renovar")]
+    [HttpPost("renovar"), EnableRateLimiting("auth-renovar")]
     [ProducesResponseType<TokensAuth>(StatusCodes.Status200OK)]
     public async Task<ActionResult<TokensAuth>> Renovar(RenovarEntrada entrada, CancellationToken ct) =>
         Ok(await auth.RenovarAsync(entrada, ct));

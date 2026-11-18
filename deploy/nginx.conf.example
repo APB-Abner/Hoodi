@@ -10,10 +10,23 @@ server {
     server_name hoodi.example.invalid;
     ssl_certificate /etc/letsencrypt/live/hoodi.example.invalid/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/hoodi.example.invalid/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    client_max_body_size 64k;
+
+    # A API também envia estes cabeçalhos; o nginx cobre respostas de erro geradas por ele (413, 502...).
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    # Em produção real, restrinja /health ao monitor (ou à rede interna) e desligue a documentação com Docs__Enabled=false.
+    # location = /health { allow 127.0.0.1; deny all; proxy_pass http://127.0.0.1:5000; }
 
     location / {
         proxy_pass http://127.0.0.1:5000;
         proxy_set_header Host $host;
+        proxy_read_timeout 30s;
         # Exactly one trusted loopback proxy. Overwrite user-supplied forwarding headers.
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;

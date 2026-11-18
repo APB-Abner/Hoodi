@@ -11,3 +11,10 @@ Smtp__Port=1025
 # HTTPS is the default. Only for the isolated HTTP demo, explicitly set false.
 Https__RedirectEnabled=true
 Https__Port=443
+
+# Documentação interativa (/scalar e /openapi). Ligada por padrão para a demo da GS.
+# Em produção real, defina false.
+Docs__Enabled=true
+
+# CORS fechado por padrão (o app nativo não usa CORS). Para liberar um cliente web, uma origem por linha:
+# Cors__AllowedOrigins__0=https://app.exemplo.com.br
