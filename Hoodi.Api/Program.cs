@@ -61,11 +61,6 @@ builder.Services.AddHttpClient<Hoodi.Application.Rotas.IProvedorRotas, Hoodi.Inf
 {
     client.Timeout = TimeSpan.FromSeconds(15); client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
-builder.Services.AddScoped<Hoodi.Application.Lugares.ILugares, Hoodi.Application.Lugares.LugaresService>();
-builder.Services.AddHttpClient<Hoodi.Application.Lugares.IProvedorLugares, Hoodi.Infrastructure.Rotas.HeigitPlacesProvider>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(8); client.MaxResponseContentBufferSize = 512 * 1024;
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 builder.Services.AddSingleton<Hoodi.Application.Risk.IH3CellValidator>(s => s.GetRequiredService<Hoodi.Infrastructure.Risk.H3SpatialIndex>());
 builder.Services.AddScoped<Hoodi.Application.Risk.IProducerSnapshotDecoder, Hoodi.Infrastructure.Risk.ProducerV2Decoder>();
 builder.Services.AddScoped<Hoodi.Application.Risk.ISnapshotPublicationStore, Hoodi.Infrastructure.Risk.SnapshotPublicationStore>();
@@ -145,8 +140,6 @@ builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("rotas", context => RateLimitPartition.GetFixedWindowLimiter(context.User.FindFirst("sub")?.Value ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-    options.AddPolicy("lugares", context => RateLimitPartition.GetFixedWindowLimiter(context.User.FindFirst("sub")?.Value ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 40, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("risco-publico", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
