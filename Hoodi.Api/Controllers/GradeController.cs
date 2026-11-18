@@ -74,6 +74,9 @@ public sealed class GradeImportController(SnapshotImportService importer, IOptio
         if (parts.Length != 2 || !new[] { 2, 3 }.Any(v => parts[1] == ProducerV2Decoder.CsvName(v))) throw new RequestException("CHECKSUM_ARQUIVO_INVALIDO", 400);
         if (Hash(csv) != options.Value.ApprovedCsvSha256 || Hash(manifest) != options.Value.ApprovedManifestSha256 || Hash(fixture) != options.Value.ApprovedFixtureSha256)
             throw new SnapshotValidationException("ARTEFATO_NAO_APROVADO");
+        var contrato = new[] { 2, 3 }.First(v => parts[1] == ProducerV2Decoder.CsvName(v));
+        if (!System.Text.RegularExpressions.Regex.IsMatch(input.Versao, $@"(^|[^0-9a-z])v{contrato}([^0-9]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            throw new RequestException("VERSAO_DIVERGE_DO_CONTRATO", 400);
         var result = await importer.ImportAsync(new(input.Versao, parts[0], csv, manifest, fixture), ct);
         return StatusCode(result.AlreadyPublished ? 200 : 201, result);
     }

@@ -97,6 +97,7 @@ public sealed class ProducerV2IntegrationTests
             // Defaults are the v3 release; v2 is the rollback release and must be approved explicitly (Risk__Approved*).
             if (contract == 2) { risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256; risk.ApprovedManifestSha256 = Sha(Bytes(2, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(2, "fixture_v2.json")); }
         }
+        Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: contract == 2 ? "nando-v3-2026-abr-set" : "nando-v2-2026-jan-set"))).StatusCode);
         var imported = await op.PostAsync("/v1/admin/risco/importar", Upload(contract));
         Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
         Assert.False((await imported.Content.ReadFromJsonAsync<PublicationResult>())!.AlreadyPublished);
@@ -123,9 +124,9 @@ public sealed class ProducerV2IntegrationTests
         Bytes(contract, $"risco_h3_faixa_v{contract}.csv"), Bytes(contract, "manifest.json"), Bytes(contract, $"fixture_v{contract}.json"));
     private static byte[] Bytes(int contract, string name) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, contract == 2 ? "RiskFixture" : "RiskFixtureV3", name));
     private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-    private static MultipartFormDataContent Upload(int contract = 2, bool tamper = false)
+    private static MultipartFormDataContent Upload(int contract = 2, bool tamper = false, string? label = null)
     {
-        var content = new MultipartFormDataContent(); content.Add(new StringContent(contract == 2 ? "nando-v2-2026-jan-set" : "nando-v3-2026-abr-set"), "versao");
+        var content = new MultipartFormDataContent(); content.Add(new StringContent(label ?? (contract == 2 ? "nando-v2-2026-jan-set" : "nando-v3-2026-abr-set")), "versao");
         foreach (var (field, name) in new[] { ("csv", $"risco_h3_faixa_v{contract}.csv"), ("sha256", $"risco_h3_faixa_v{contract}.csv.sha256"), ("manifest", "manifest.json"), ("fixture", $"fixture_v{contract}.json") })
         {
             var bytes = Bytes(contract, name); if (tamper && field == "csv") bytes[0] ^= 1;
