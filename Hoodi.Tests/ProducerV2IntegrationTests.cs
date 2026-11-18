@@ -98,6 +98,7 @@ public sealed class ProducerV2IntegrationTests
             if (contract == 2) { risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256; risk.ApprovedManifestSha256 = Sha(Bytes(2, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(2, "fixture_v2.json")); }
         }
         Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: contract == 2 ? "nando-v3-2026-abr-set" : "nando-v2-2026-jan-set"))).StatusCode);
+Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: "nando-v2-v3-2026"))).StatusCode);
         var imported = await op.PostAsync("/v1/admin/risco/importar", Upload(contract));
         Assert.Equal(HttpStatusCode.Created, imported.StatusCode);
         Assert.False((await imported.Content.ReadFromJsonAsync<PublicationResult>())!.AlreadyPublished);

@@ -11,19 +11,20 @@ namespace Hoodi.Tests;
 public sealed class RouteScoringTests
 {
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "RouteFixture", "vetores_rota_v2.json");
-    public static IEnumerable<object[]> Cases()
+    private static string VectorFile(int contract) => Path.Combine(AppContext.BaseDirectory, "RouteFixture", $"vetores_rota_v{contract}.json");
+    public static IEnumerable<object[]> Cases() => new[] { 2, 3 }.SelectMany(contract =>
     {
-        using var document = JsonDocument.Parse(File.ReadAllBytes(Fixture));
+        using var document = JsonDocument.Parse(File.ReadAllBytes(VectorFile(contract)));
         return document.RootElement.GetProperty("casos").EnumerateArray().Concat(document.RootElement.GetProperty("rotas_fronteira").EnumerateArray())
-            .Select(c => new object[] { c.GetProperty("nome").GetString()! }).ToArray();
-    }
+            .Select(c => new object[] { contract, c.GetProperty("nome").GetString()! }).ToArray();
+    }).ToArray();
     [Theory, MemberData(nameof(Cases))]
-    public async Task MustMatchProducerGoldenRoute(string name)
+    public async Task MustMatchProducerGoldenRoute(int contract, string name)
     {
-        using var document = JsonDocument.Parse(File.ReadAllBytes(Fixture)); var root = document.RootElement;
+        using var document = JsonDocument.Parse(File.ReadAllBytes(VectorFile(contract))); var root = document.RootElement;
         var sample = root.GetProperty("casos").EnumerateArray().Concat(root.GetProperty("rotas_fronteira").EnumerateArray()).Single(x => x.GetProperty("nome").GetString() == name);
-        var folder = Path.Combine(AppContext.BaseDirectory, "RiskFixture");
-        var package = new SnapshotPackage("v2", ProducerV2Decoder.DeliveredSha256, File.ReadAllBytes(Path.Combine(folder, "risco_h3_faixa_v2.csv")), File.ReadAllBytes(Path.Combine(folder, "manifest.json")), File.ReadAllBytes(Path.Combine(folder, "fixture_v2.json")));
+        var folder = Path.Combine(AppContext.BaseDirectory, contract == 2 ? "RiskFixture" : "RiskFixtureV3");
+        var package = new SnapshotPackage($"v{contract}", contract == 2 ? ProducerV2Decoder.DeliveredSha256 : ProducerV2Decoder.DeliveredSha256V3, File.ReadAllBytes(Path.Combine(folder, ProducerV2Decoder.CsvName(contract))), File.ReadAllBytes(Path.Combine(folder, "manifest.json")), File.ReadAllBytes(Path.Combine(folder, $"fixture_v{contract}.json")));
         var snapshot = (await new ProducerV2Decoder(new H3SpatialIndex()).DecodeAsync(package, default)).Cells.ToDictionary(x => (x.H3Cell, x.Band));
         var engine = new RouteScoring(new H3SpatialIndex()); var scores = new List<PontuacaoRota>();
         foreach (var route in sample.GetProperty("rotas").EnumerateArray())

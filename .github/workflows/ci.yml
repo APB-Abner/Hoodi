@@ -15,7 +15,9 @@ jobs:
       - run: dotnet build Hoodi.slnx --no-restore -c Release -warnaserror
       - run: dotnet test Hoodi.slnx --no-build -c Release
       - name: pacotes NuGet vulneráveis (inclui dependências transitivas)
+        shell: bash
         run: |
+          set -euo pipefail
           dotnet list Hoodi.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
           if grep -q "has the following vulnerable packages" vuln.txt; then echo "pacote vulnerável"; exit 1; fi
   contrato:

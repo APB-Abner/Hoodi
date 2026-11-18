@@ -29,6 +29,7 @@
     <None Include="..\data\risk\v2\*" Link="RiskFixture\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\data\risk\v3\*" Link="RiskFixtureV3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\data\routes\v2\*" Link="RouteFixture\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\data\routes\v3\*" Link="RouteFixture\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -75,7 +75,9 @@ public sealed class GradeImportController(SnapshotImportService importer, IOptio
         if (Hash(csv) != options.Value.ApprovedCsvSha256 || Hash(manifest) != options.Value.ApprovedManifestSha256 || Hash(fixture) != options.Value.ApprovedFixtureSha256)
             throw new SnapshotValidationException("ARTEFATO_NAO_APROVADO");
         var contrato = new[] { 2, 3 }.First(v => parts[1] == ProducerV2Decoder.CsvName(v));
-        if (!System.Text.RegularExpressions.Regex.IsMatch(input.Versao, $@"(^|[^0-9a-z])v{contrato}([^0-9]|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        // O rótulo traz exatamente um token de versão e ele é o do contrato (nada de "v2-v3").
+        var tokens = System.Text.RegularExpressions.Regex.Matches(input.Versao, @"(?<![0-9a-z])v([0-9]+)(?![0-9])", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (tokens.Count != 1 || tokens[0].Groups[1].Value != contrato.ToString())
             throw new RequestException("VERSAO_DIVERGE_DO_CONTRATO", 400);
         var result = await importer.ImportAsync(new(input.Versao, parts[0], csv, manifest, fixture), ct);
         return StatusCode(result.AlreadyPublished ? 200 : 201, result);
