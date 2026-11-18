@@ -16,7 +16,7 @@ public sealed class AutenticacaoService(
     IDataProtectionProvider protecao, TimeProvider relogio) : IAutenticacaoService
 {
     private readonly IDataProtector replay = protecao.CreateProtector("hoodi.auth.refresh-replay.v1");
-    private readonly IDataProtector email = protecao.CreateProtector("hoodi.auth.email-outbox.v1");
+    private readonly IDataProtector email = protecao.CreateProtector(Hoodi.Application.Auth.ProtectionPurposes.AuthenticationEmailOutbox);
     private static readonly Usuario UsuarioFicticio = new("Dummy", "dummy@example.invalid", "placeholder", DateTimeOffset.UnixEpoch);
     private static readonly string HashFicticio = new PasswordHasher<Usuario>().HashPassword(UsuarioFicticio,
         Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));

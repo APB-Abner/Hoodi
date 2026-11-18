@@ -2,6 +2,7 @@
 using System.Net;
 using Hoodi.Api.Configuration;
 using Hoodi.Api.Errors;
+using Hoodi.Api.Seguranca;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Threading.RateLimiting;
 using Hoodi.Api.Auth;
@@ -33,7 +34,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer((document, context, ct) =>
 {
     document.Info.Title = "hoodi API";
-    document.Info.Version = "0.6.0-draft";
+    document.Info.Version = ApiInfo.Versao;
     return Task.CompletedTask;
 }));
 builder.Services.AddMemoryCache();
@@ -49,7 +50,11 @@ builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IAutenticacaoService, AutenticacaoService>();
 builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.H3SpatialIndex>();
 builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.SnapshotCellCache>();
-builder.Services.AddSingleton<Hoodi.Infrastructure.Rotas.RouteScoring>();
+builder.Services.AddSingleton<Hoodi.Application.Rotas.IIndiceEspacialRotas>(s => s.GetRequiredService<Hoodi.Infrastructure.Risk.H3SpatialIndex>());
+builder.Services.AddSingleton<Hoodi.Application.Rotas.RouteScoring>();
+builder.Services.AddScoped<Hoodi.Application.Rotas.IAvaliacaoRotas, Hoodi.Application.Rotas.AvaliacaoRotasService>();
+builder.Services.AddScoped<Hoodi.Application.Rotas.IGradeParaRotas, Hoodi.Infrastructure.Rotas.GradeParaRotasReader>();
+builder.Services.AddScoped<Hoodi.Application.Rotas.IPoliticaRotas, Hoodi.Infrastructure.Rotas.PoliticaRotasReader>();
 builder.Services.AddOptions<Hoodi.Infrastructure.Rotas.RotasOptions>().Bind(builder.Configuration.GetSection("Rotas"))
     .Validate(o => Enum.IsDefined(o.FonteRisco) && Enum.IsDefined(o.SemDado), "Rotas modes must be defined enum values.").ValidateOnStart();
 builder.Services.AddHttpClient<Hoodi.Application.Rotas.IProvedorRotas, Hoodi.Infrastructure.Rotas.HeigitRoutesProvider>(client =>
@@ -120,6 +125,16 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Add(IPAddress.Loopback);
     options.KnownProxies.Add(IPAddress.IPv6Loopback);
 });
+// CORS fechado por padrão (o app nativo não usa CORS). Para liberar um cliente web: Cors__AllowedOrigins__0=https://...
+builder.Services.AddCors();
+builder.Services.AddOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>().Configure<IConfiguration>((options, configuration) =>
+{
+    var origens = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    options.AddDefaultPolicy(policy =>
+    {
+        if (origens.Length > 0) policy.WithOrigins(origens).WithMethods("GET", "POST", "DELETE").WithHeaders("Authorization", "Content-Type");
+    });
+});
 builder.Services.AddHttpsRedirection(options => options.HttpsPort = builder.Configuration.GetValue("Https:Port", 443));
 builder.Services.AddRateLimiter(options =>
 {
@@ -137,6 +152,10 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    // Renovação de sessão: mais restrita que o limite geral de "auth", para dificultar tentativa com refresh token roubado.
+    options.AddPolicy("auth-renovar", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 15, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.OnRejected = async (context, ct) =>
     {
         context.HttpContext.Response.StatusCode = 429;
@@ -160,17 +179,23 @@ await using (var scope = app.Services.CreateAsyncScope())
     await scope.ServiceProvider.GetRequiredService<HoodiDbContext>().Database.MigrateAsync();
 app.UseForwardedHeaders();
 app.UseMiddleware<ApiExceptionMiddleware>();
-app.MapOpenApi();
-app.MapScalarApiReference("/scalar", options => options
-    .WithTitle("hoodi API")
-    .WithOpenApiRoutePattern("/openapi/{documentName}.json"));
+app.UseMiddleware<CabecalhosSegurancaMiddleware>();
+// Documentação interativa: ligada por padrão (demo da GS). Em produção real: Docs__Enabled=false.
+if (app.Configuration.GetValue("Docs:Enabled", true))
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference("/scalar", options => options
+        .WithTitle("hoodi API")
+        .WithOpenApiRoutePattern("/openapi/{documentName}.json"));
+}
 if (app.Configuration.GetValue("Https:RedirectEnabled", true)) app.UseHttpsRedirection();
+app.UseCors();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/health", async (HoodiDbContext db, CancellationToken ct) =>
-    await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok", versaoApi = "0.6.0-draft" }) : Results.StatusCode(503));
+    await db.Database.CanConnectAsync(ct) ? Results.Ok(new { status = "ok", versaoApi = ApiInfo.Versao }) : Results.StatusCode(503));
 app.Run();
 
 public partial class Program;

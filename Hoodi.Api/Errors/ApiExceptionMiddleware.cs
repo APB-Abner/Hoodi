@@ -8,7 +8,6 @@ public sealed class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExce
 {
     public async Task InvokeAsync(HttpContext context)
     {
-        context.Response.Headers.CacheControl = "no-store";
         try { await next(context); }
         catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested && !context.Response.HasStarted)
         {

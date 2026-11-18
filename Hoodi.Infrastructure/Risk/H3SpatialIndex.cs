@@ -7,8 +7,13 @@ using NetTopologySuite.Geometries;
 
 namespace Hoodi.Infrastructure.Risk;
 
-public sealed class H3SpatialIndex : IH3CellValidator
+public sealed class H3SpatialIndex : IH3CellValidator, Hoodi.Application.Rotas.IIndiceEspacialRotas
 {
+    public string Cell(Hoodi.Application.Rotas.PontoRota point)
+    {
+        Hoodi.Application.Rotas.CoordenadasRota.Validar(point);
+        return new Coordinate(point.Longitude, point.Latitude).ToH3Index(9).ToString();
+    }
     public bool IsValidResolution9(string cell) => cell is { Length: 15 } &&
         ulong.TryParse(cell, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value) &&
         new H3Index(value) is var index && index.IsValidCell && index.Resolution == 9;

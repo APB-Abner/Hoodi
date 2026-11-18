@@ -2,7 +2,7 @@
 
 ## Contract changes
 
-The v0.5.2 normative contract is preserved at `contracts/baseline/openapi.v0.5.2.yaml`; the current contract is v0.5.3. The original v0.5.1 baseline is unchanged.
+This release's v0.5.3 contract is preserved at `contracts/baseline/openapi.v0.5.3.yaml`, alongside the unchanged v0.5.2 and v0.5.1 baselines. The current `contracts/openapi.yaml` entry point has since advanced to the consolidated v0.6 draft.
 
 - Invitation codes are canonically 64 uppercase hexadecimal characters. The server trims surrounding whitespace and normalizes case before validation and hashing. The schema's length/pattern constraints describe this normalized representation.
 - Transport is the app deep link `hoodi://convite#codigo=CODE`, shared as a link or encoded in QR by the app. No new response field or endpoint is introduced. Codes must not be placed in query strings or logs, and manual typing is not the expected flow.

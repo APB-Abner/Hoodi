@@ -99,7 +99,8 @@ public sealed class DeploymentIntegrationTests
         var info = await connection.Content.ReadFromJsonAsync<ConnectionInfo>();
         Assert.Equal("https", info!.Scheme);
         Assert.Equal("198.51.100.10", info.Ip);
-        for (var i = 0; i < 30; i++)
+        // /v1/auth/renovar tem limite próprio (15/min por IP), mais restrito que o geral de auth (30/min).
+        for (var i = 0; i < 15; i++)
             Assert.Equal(HttpStatusCode.Unauthorized, (await Send(client, HttpMethod.Post, "/v1/auth/renovar", "127.0.0.1", "198.51.100.10", "https")).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await Send(client, HttpMethod.Post, "/v1/auth/renovar", "127.0.0.1", "198.51.100.10", "https")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Send(client, HttpMethod.Post, "/v1/auth/renovar", "127.0.0.1", "198.51.100.11", "https")).StatusCode);
@@ -132,6 +133,8 @@ public sealed class DeploymentIntegrationTests
         using var client = host.Client();
         var response = await client.GetAsync("/test/" + endpoint);
         Assert.Equal(status, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains(code, body);
@@ -268,7 +271,7 @@ public sealed class DeploymentFactory(DeploymentState state, bool redirectEnable
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HoodiDbContext>();
-        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("hoodi.auth.email-outbox.v1");
+        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector(Hoodi.Application.Auth.ProtectionPurposes.AuthenticationEmailOutbox);
         return (await db.Emails.ToListAsync()).Select(x => JsonSerializer.Deserialize<EmailAutenticacao>(protector.Unprotect(x.ConteudoCifrado))!)
             .Single(x => x.Email == address).Token;
     }

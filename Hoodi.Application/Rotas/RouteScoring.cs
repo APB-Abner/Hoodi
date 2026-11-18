@@ -1,19 +1,12 @@
-using H3.Extensions;
 using Hoodi.Application.Errors;
 using Hoodi.Application.Risk;
-using Hoodi.Application.Rotas;
-using NetTopologySuite.Geometries;
 
-namespace Hoodi.Infrastructure.Rotas;
+namespace Hoodi.Application.Rotas;
 
-public sealed class RouteScoring
+public sealed class RouteScoring(IIndiceEspacialRotas spatial)
 {
-    public static void Validate(PontoRota p)
-    {
-        if (!double.IsFinite(p.Latitude) || !double.IsFinite(p.Longitude) || p.Latitude is < -90 or > 90 || p.Longitude is < -180 or >= 180)
-            throw new RequestException("ROTA_INVALIDA", 422);
-    }
-    public static string Cell(PontoRota p) { Validate(p); return new Coordinate(p.Longitude, p.Latitude).ToH3Index(9).ToString(); }
+    public static void Validate(PontoRota p) => CoordenadasRota.Validar(p);
+    public string Cell(PontoRota p) { Validate(p); return spatial.Cell(p); }
     public static double Distance(PontoRota a, PontoRota b)
     {
         const double rad = Math.PI / 180;

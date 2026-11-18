@@ -10,8 +10,6 @@ public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapsho
 {
     public const string DeliveredSha256 = "2dddef701bdecb65142874980f1ae5aba7b2ac6ab2abad5c47b07f07ecc5080a";
     public const string Warning = "Melhor dado disponível no período. Não indica tempo real nem local seguro.";
-    private static readonly string[] Names = ["madrugada", "manha", "tarde", "noite_cedo", "noite"];
-    private static readonly string[] Intervals = ["[0,6)", "[6,12)", "[12,18)", "[18,21)", "[21,24)"];
     private const string Header = "h3_cell,faixa,faixa_nome,status,nivel,pontuacao_mensal,n_registros";
 
     public Task<DecodedSnapshot> DecodeAsync(SnapshotPackage package, CancellationToken ct)
@@ -28,7 +26,7 @@ public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapsho
         RejectDuplicateProperties(manifest.RootElement); RejectDuplicateProperties(fixture.RootElement);
         var m = manifest.RootElement; var f = fixture.RootElement;
         Require(m.GetProperty("contrato_versao").GetInt32() == 2 && f.GetProperty("contrato_versao").GetInt32() == 2, "VERSAO_CONTRATO_INVALIDA");
-        Require(m.GetProperty("h3_resolucao").GetInt32() == 9 && m.GetProperty("fuso").GetString() == "America/Sao_Paulo", "REFERENCIA_INVALIDA");
+        Require(m.GetProperty("h3_resolucao").GetInt32() == 9 && m.GetProperty("fuso").GetString() == FaixasRisco.Fuso, "REFERENCIA_INVALIDA");
         Require(m.GetProperty("aviso").GetString() == Warning, "AVISO_INVALIDO");
         Require(m.GetProperty("fonte").GetProperty("orgao").GetString() == "SSP-SP" &&
             m.GetProperty("fonte").GetProperty("arquivo").GetString() == "SPDadosCriminais_2026.xlsx" &&
@@ -41,8 +39,8 @@ public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapsho
         Require(m.GetProperty("privacidade").GetProperty("k_minimo").GetInt32() == 3, "PRIVACIDADE_INVALIDA");
         var bands = m.GetProperty("faixas").EnumerateArray().ToArray();
         Require(bands.Length == 5, "FAIXAS_INVALIDAS");
-        for (var i = 0; i < 5; i++) Require(bands[i].GetProperty("faixa").GetInt32() == i && bands[i].GetProperty("faixa_nome").GetString() == Names[i] &&
-            bands[i].GetProperty("intervalo_horas").GetString() == Intervals[i], "FAIXAS_INVALIDAS");
+        for (var i = 0; i < 5; i++) Require(bands[i].GetProperty("faixa").GetInt32() == i && bands[i].GetProperty("faixa_nome").GetString() == FaixasRisco.Todas[i].Nome &&
+            bands[i].GetProperty("intervalo_horas").GetString() == FaixasRisco.Todas[i].Intervalo, "FAIXAS_INVALIDAS");
         var cuts = m.GetProperty("cortes_nivel").EnumerateArray().Select(x => x.GetDecimal()).ToArray();
         Require(cuts.Length == 3 && cuts[0] >= 0 && cuts[0] < cuts[1] && cuts[1] < cuts[2], "CORTES_INVALIDOS");
         var b = m.GetProperty("perimetro");
@@ -63,7 +61,7 @@ public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapsho
         {
             ct.ThrowIfCancellationRequested();
             var parts = line.Split(','); Require(parts.Length == 7, "CSV_COLUNAS_INVALIDAS");
-            var band = Int(parts[1]); Require(band is >= 0 and <= 4 && parts[2] == Names[band], "FAIXA_INVALIDA");
+            var band = Int(parts[1]); Require(band is >= 0 and <= 4 && parts[2] == FaixasRisco.Todas[band].Nome, "FAIXA_INVALIDA");
             var row = new RiskCell(parts[0], band, parts[3], parts[4] == "" ? null : Int(parts[4]),
                 parts[5] == "" ? null : decimal.Parse(parts[5], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture), Int(parts[6]));
             Require(spatial.IsValidResolution9(row.H3Cell) && row.H3Cell.All(c => !char.IsUpper(c)), "H3_INVALIDO");
@@ -89,7 +87,7 @@ public sealed class ProducerV2Decoder(H3SpatialIndex spatial) : IProducerSnapsho
             var cell = item.GetProperty("h3_cell").GetString()!; var band = item.GetProperty("faixa").GetInt32();
             Require(sampleKeys.Add((cell, band)) && keys.ContainsKey((cell, band)), "FIXTURE_INVALIDA");
             var row = keys[(cell, band)];
-            Require(item.GetProperty("faixa_nome").GetString() == Names[band] && item.GetProperty("status").GetString() == row.Status &&
+            Require(item.GetProperty("faixa_nome").GetString() == FaixasRisco.Todas[band].Nome && item.GetProperty("status").GetString() == row.Status &&
                 NullableInt(item.GetProperty("nivel")) == row.Level && NullableDecimal(item.GetProperty("pontuacao_mensal")) == row.MonthlyScore &&
                 item.GetProperty("n_registros").GetInt32() == row.RecordCount, "FIXTURE_INVALIDA");
         }

@@ -1,5 +1,8 @@
 # Route slicing, scoring and ranking
 
+The application use case, infrastructure ports and deliberately deferred architecture
+debt are documented in [Route application boundary](route-application-boundary.md).
+
 ## Configuration and key
 
 Set these environment variables on the API process and restart:

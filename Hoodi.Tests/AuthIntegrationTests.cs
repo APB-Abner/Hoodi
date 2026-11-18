@@ -208,7 +208,7 @@ public sealed class AuthFactory : WebApplicationFactory<Program>
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HoodiDbContext>();
-        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("hoodi.auth.email-outbox.v1");
+        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector(Hoodi.Application.Auth.ProtectionPurposes.AuthenticationEmailOutbox);
         var mensagens = (await db.Emails.ToListAsync()).Select(x => (x.CriadoEmUtc,
             Data: JsonSerializer.Deserialize<EmailAutenticacao>(protector.Unprotect(x.ConteudoCifrado))!));
         return mensagens.Where(x => x.Data.Proposito == proposito).OrderByDescending(x => x.CriadoEmUtc).First().Data.Token;

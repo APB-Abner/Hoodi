@@ -19,7 +19,7 @@ public sealed class EmailOutboxWorker(IServiceScopeFactory scopes, IConfiguratio
                 using var scope = scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<HoodiDbContext>();
                 var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>()
-                    .CreateProtector("hoodi.auth.email-outbox.v1");
+                    .CreateProtector(Hoodi.Application.Auth.ProtectionPurposes.AuthenticationEmailOutbox);
                 var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
                 var agora = clock.GetUtcNow();
                 // Remove expired replay ciphertext instead of keeping refresh tokens indefinitely.
