@@ -29,7 +29,7 @@ public sealed class HeigitRoutesProvider(HttpClient client, IOptions<RotasOption
                 var coords = geometry.GetProperty("coordinates").EnumerateArray().ToArray();
                 if (coords.Length is < 2 or > 10000) throw new ProvedorRotasException();
                 var points = coords.Select(p => new PontoRota(p[1].GetDouble(), p[0].GetDouble())).ToArray();
-                foreach (var point in points) RouteScoring.Validate(point);
+                foreach (var point in points) CoordenadasRota.Validar(point);
                 var duration = feature.GetProperty("properties").GetProperty("summary").GetProperty("duration").GetDouble();
                 if (!double.IsFinite(duration) || duration <= 0) throw new ProvedorRotasException();
                 result.Add(new(points, duration));

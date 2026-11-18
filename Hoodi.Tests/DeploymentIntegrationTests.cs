@@ -133,6 +133,8 @@ public sealed class DeploymentIntegrationTests
         using var client = host.Client();
         var response = await client.GetAsync("/test/" + endpoint);
         Assert.Equal(status, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains(code, body);
@@ -269,7 +271,7 @@ public sealed class DeploymentFactory(DeploymentState state, bool redirectEnable
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HoodiDbContext>();
-        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("hoodi.auth.email-outbox.v1");
+        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector(Hoodi.Application.Auth.ProtectionPurposes.AuthenticationEmailOutbox);
         return (await db.Emails.ToListAsync()).Select(x => JsonSerializer.Deserialize<EmailAutenticacao>(protector.Unprotect(x.ConteudoCifrado))!)
             .Single(x => x.Email == address).Token;
     }

@@ -2,6 +2,8 @@
 
 Backend em .NET 10. Autenticação, contatos/convites, tokens Expo, exclusão de conta, pânico e grade H3 v2 estão implementados. Rotas agora incluem fatiamento, cálculo, ranking e adaptador HeiGIT; falta configurar a chave e validar a integração real. Veja [rotas](docs/routes-v0.6.md), [grade](docs/risk-snapshot-v2-integration.md) e [pânico](docs/panic-account-v0.6.md). Autenticação de dispositivos continua pendente.
 
+A avaliação de rotas fica na Application; o controller delega o caso de uso, e os adaptadores de H3, grade e provedor ficam na Infrastructure. As faixas horárias são compartilhadas com a importação. Veja a [fronteira da Application e as dívidas preservadas](docs/route-application-boundary.md).
+
 ## Integrantes
 
 | Integrante | RM | Responsabilidade prevista no documento consolidado |
@@ -143,7 +145,7 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 163 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/routes-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
+Última execução: 163 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/route-cohesion-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore

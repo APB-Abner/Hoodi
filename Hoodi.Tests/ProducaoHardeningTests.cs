@@ -37,13 +37,18 @@ public sealed class ProducaoHardeningTests
         }
     }
 
-    [Fact]
-    public async Task Respostas_DevemTrazerCabecalhosDeSeguranca()
+    [Theory]
+    [InlineData("/health", HttpStatusCode.OK)]
+    [InlineData("/openapi/v1.json", HttpStatusCode.OK)]
+    [InlineData("/scalar/", HttpStatusCode.OK)]
+    [InlineData("/not-an-endpoint", HttpStatusCode.NotFound)]
+    [InlineData("/v1/contatos", HttpStatusCode.Unauthorized)]
+    public async Task Respostas_DevemTrazerCabecalhosDeSeguranca(string path, HttpStatusCode status)
     {
         using var state = new DeploymentState();
         using var host = new HardeningFactory(state);
-        var r = await host.CreateClient().GetAsync("/health");
-        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var r = await host.CreateClient().GetAsync(path);
+        Assert.Equal(status, r.StatusCode);
         Assert.Equal("nosniff", r.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("no-referrer", r.Headers.GetValues("Referrer-Policy").Single());
         Assert.Equal("DENY", r.Headers.GetValues("X-Frame-Options").Single());

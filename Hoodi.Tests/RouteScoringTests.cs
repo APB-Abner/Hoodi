@@ -25,7 +25,7 @@ public sealed class RouteScoringTests
         var folder = Path.Combine(AppContext.BaseDirectory, "RiskFixture");
         var package = new SnapshotPackage("v2", ProducerV2Decoder.DeliveredSha256, File.ReadAllBytes(Path.Combine(folder, "risco_h3_faixa_v2.csv")), File.ReadAllBytes(Path.Combine(folder, "manifest.json")), File.ReadAllBytes(Path.Combine(folder, "fixture_v2.json")));
         var snapshot = (await new ProducerV2Decoder(new H3SpatialIndex()).DecodeAsync(package, default)).Cells.ToDictionary(x => (x.H3Cell, x.Band));
-        var engine = new RouteScoring(); var scores = new List<PontuacaoRota>();
+        var engine = new RouteScoring(new H3SpatialIndex()); var scores = new List<PontuacaoRota>();
         foreach (var route in sample.GetProperty("rotas").EnumerateArray())
         {
             var input = route.GetProperty("entrada"); var points = input.GetProperty("pontos").EnumerateArray().Select(p => new PontoRota(p[0].GetDouble(), p[1].GetDouble())).ToArray();
@@ -55,7 +55,7 @@ public sealed class RouteScoringTests
         using var doc = JsonDocument.Parse(bytes);
         var points = doc.RootElement.GetProperty("pontos_interiores").EnumerateArray().Concat(doc.RootElement.GetProperty("pontos_fronteira").EnumerateArray()).ToArray();
         Assert.Equal(40, points.Length);
-        foreach (var point in points) Assert.Equal(point.GetProperty("h3_cell").GetString(), RouteScoring.Cell(new(point.GetProperty("lat").GetDouble(), point.GetProperty("lon").GetDouble())));
+        foreach (var point in points) Assert.Equal(point.GetProperty("h3_cell").GetString(), new H3SpatialIndex().Cell(new(point.GetProperty("lat").GetDouble(), point.GetProperty("lon").GetDouble())));
         foreach (var tie in doc.RootElement.GetProperty("empate_vetores").EnumerateArray()) Assert.Equal(tie.GetProperty("empate").GetBoolean(), RouteScoring.Tie(tie.GetProperty("a").GetDouble(), tie.GetProperty("b").GetDouble()));
     }
     [Theory]
@@ -66,7 +66,7 @@ public sealed class RouteScoringTests
     public void ModesMustChangeScoreAndEffectiveCoverageWithoutHidingMissingData(FonteRisco source, TratamentoSemDado missing, double expected, double coverage)
     {
         var snapshot = new Dictionary<(string, int), RiskCell> { [("known", 2)] = new("known", 2, "com_dado", 3, 8, 20), [("no-data", 2)] = new("no-data", 2, "sem_dado", null, null, 0) };
-        var result = new RouteScoring().Score([new("known", 500), new("no-data", 300), new("outside", 200)], 2, snapshot, source, missing);
+        var result = new RouteScoring(new H3SpatialIndex()).Score([new("known", 500), new("no-data", 300), new("outside", 200)], 2, snapshot, source, missing);
         Close(expected, result.Acumulada); Close(coverage, result.CoberturaPercentual); Close(30, result.PercentualSemDado); Close(20, result.PercentualForaCobertura);
         Assert.Equal(missing == TratamentoSemDado.Desconhecido, result.DadoInsuficiente);
     }
@@ -74,9 +74,9 @@ public sealed class RouteScoringTests
     public void RankingMustUseAnchoredClassesAndUnknownMustNeverGainRank()
     {
         PontuacaoRota Make(double value, double meters = 1000, bool insufficient = false) => new(value, value, meters, meters, 0, 0, 100, insufficient);
-        var result = new RouteScoring().Rank([Make(1), Make(1 + .75e-9), Make(1 + 1.5e-9), Make(0, insufficient: true)]);
+        var result = new RouteScoring(new H3SpatialIndex()).Rank([Make(1), Make(1 + .75e-9), Make(1 + 1.5e-9), Make(0, insufficient: true)]);
         Assert.Equal(new int?[] { 1, 2, 3, null }, result);
-        Assert.Equal(new int?[] { 2, 1 }, new RouteScoring().Rank([Make(1, 2000), Make(1 + .5e-9, 1000)]));
+        Assert.Equal(new int?[] { 2, 1 }, new RouteScoring(new H3SpatialIndex()).Rank([Make(1, 2000), Make(1 + .5e-9, 1000)]));
     }
     private static void Close(double expected, double actual) => Assert.InRange(Math.Abs(expected - actual), 0, Math.Max(1, Math.Abs(expected)) * 1e-6);
 }

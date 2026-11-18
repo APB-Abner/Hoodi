@@ -25,7 +25,7 @@ public sealed class ContaService(HoodiDbContext db, IPasswordHasher<Usuario> pas
             throw new RequestException("SENHA_INVALIDA", 403);
 
         // Remove queued authentication mail too; never expose its decrypted payload.
-        var protector = protection.CreateProtector("hoodi.auth.email-outbox.v1");
+        var protector = protection.CreateProtector(Hoodi.Application.Auth.ProtectionPurposes.AuthenticationEmailOutbox);
         foreach (var mail in await db.Emails.ToListAsync(ct))
         {
             try

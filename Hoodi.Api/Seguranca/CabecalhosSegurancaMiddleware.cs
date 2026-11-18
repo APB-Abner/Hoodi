@@ -20,8 +20,7 @@ public sealed class CabecalhosSegurancaMiddleware(RequestDelegate next)
             h["X-Content-Type-Options"] = "nosniff";
             h["Referrer-Policy"] = "no-referrer";
             h["X-Frame-Options"] = "DENY";
-            var docs = context.Request.Path.StartsWithSegments("/scalar");
-            if (!docs && !h.ContainsKey("Cache-Control")) h["Cache-Control"] = "no-store";
+            if (!h.ContainsKey("Cache-Control")) h["Cache-Control"] = "no-store";
             return Task.CompletedTask;
         });
         return next(context);

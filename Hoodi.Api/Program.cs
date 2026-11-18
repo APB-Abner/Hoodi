@@ -50,7 +50,11 @@ builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IAutenticacaoService, AutenticacaoService>();
 builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.H3SpatialIndex>();
 builder.Services.AddSingleton<Hoodi.Infrastructure.Risk.SnapshotCellCache>();
-builder.Services.AddSingleton<Hoodi.Infrastructure.Rotas.RouteScoring>();
+builder.Services.AddSingleton<Hoodi.Application.Rotas.IIndiceEspacialRotas>(s => s.GetRequiredService<Hoodi.Infrastructure.Risk.H3SpatialIndex>());
+builder.Services.AddSingleton<Hoodi.Application.Rotas.RouteScoring>();
+builder.Services.AddScoped<Hoodi.Application.Rotas.IAvaliacaoRotas, Hoodi.Application.Rotas.AvaliacaoRotasService>();
+builder.Services.AddScoped<Hoodi.Application.Rotas.IGradeParaRotas, Hoodi.Infrastructure.Rotas.GradeParaRotasReader>();
+builder.Services.AddScoped<Hoodi.Application.Rotas.IPoliticaRotas, Hoodi.Infrastructure.Rotas.PoliticaRotasReader>();
 builder.Services.AddOptions<Hoodi.Infrastructure.Rotas.RotasOptions>().Bind(builder.Configuration.GetSection("Rotas"))
     .Validate(o => Enum.IsDefined(o.FonteRisco) && Enum.IsDefined(o.SemDado), "Rotas modes must be defined enum values.").ValidateOnStart();
 builder.Services.AddHttpClient<Hoodi.Application.Rotas.IProvedorRotas, Hoodi.Infrastructure.Rotas.HeigitRoutesProvider>(client =>

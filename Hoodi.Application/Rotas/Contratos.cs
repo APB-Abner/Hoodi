@@ -1,3 +1,4 @@
+using Hoodi.Application.Risk;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -18,3 +19,14 @@ public interface IProvedorRotas
     Task<IReadOnlyList<AlternativaRota>> ObterAsync(PontoRota origem, PontoRota destino, CancellationToken ct);
 }
 public sealed class ProvedorRotasException : Exception { }
+public interface IIndiceEspacialRotas { string Cell(PontoRota point); }
+public sealed record GradeParaRotas(string Versao, IReadOnlyDictionary<(string Cell, int Band), RiskCell> Rows);
+public interface IGradeParaRotas { Task<GradeParaRotas?> LerAtualAsync(CancellationToken ct); }
+public sealed record PoliticaRotas(FonteRisco FonteRisco, TratamentoSemDado SemDado);
+public interface IPoliticaRotas { PoliticaRotas Ler(); }
+public interface IAvaliacaoRotas { Task<AvaliacaoRotas> AvaliarAsync(AvaliarRotasEntrada input, CancellationToken ct); }
+public sealed record RotaAvaliada(string RotaId, double DuracaoSegundos, IReadOnlyList<PontoRota> Geometria, PontuacaoRota Pontuacao, int? Posicao, int Faixa);
+public sealed record AvaliacaoRotas(string Situacao, string? Motivo, string? VersaoGrade, string FonteRisco, string SemDado, IReadOnlyList<RotaAvaliada> Rotas, string Aviso)
+{
+    public string UnidadeIndice => FonteRisco == "Nivel" ? "nivel_x_km" : "pontos_por_mes_hora_x_km";
+}
