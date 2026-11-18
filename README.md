@@ -104,6 +104,16 @@ sudo bash infra/scripts/00_bootstrap.sh
 
 Arquitetura, passo a passo de reprodução, testes de falha e evidências: [infra/README.md](infra/README.md).
 
+## Privacidade e dados pessoais (Cybersecurity)
+
+Regras próprias de Semgrep mapeiam dados pessoais no código (localização, senha, saúde, tokens, CPF) e rastreiam por taint analysis se eles chegam a logs, console, arquivos, terceiros ou exceções. O workflow `security-pii` bloqueia o PR quando isso acontece no código da API. Cada achado é traduzido por IA em um alerta simples para o cidadão e somado no indicador Risco Cidadão (0–100).
+
+```bash
+bash security/scripts/setup.sh && bash security/scripts/run_audit.sh --offline
+```
+
+Regras, resultados, dashboard e limitações: [security/README.md](security/README.md).
+
 ## Fluxo de autenticação
 
 | Operação | Comportamento |

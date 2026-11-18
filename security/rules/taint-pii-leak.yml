@@ -1,0 +1,256 @@
+# =============================================================================
+# hoodi — Taint Analysis de dados pessoais (PII)
+# -----------------------------------------------------------------------------
+# Ideia: um dado sensível "contamina" (taint) toda variável que deriva dele.
+# Se um valor contaminado chega a uma SAÍDA INSEGURA (sink) sem passar por um
+# SANITIZADOR, o Semgrep reporta o caminho completo (fonte -> sink).
+#
+#   SOURCES      campos/variáveis cujo NOME indica dado pessoal (senha, cpf, latitude…)
+#   SINKS        log, console, arquivo, HTTP para terceiros, mensagem de exceção
+#   SANITIZERS   hash, máscara, criptografia, redução de precisão, comparações
+#
+# Uma regra por CATEGORIA de dado (metadata.pii_category). A categoria e o peso
+# alimentam o indicador "Risco Cidadão" do dashboard.
+# Severidade ERROR = bloqueia o pipeline (ver .github/workflows/security.yml).
+# =============================================================================
+
+# ---- Blocos reaproveitados (âncoras YAML) ----------------------------------
+x-sinks: &insecure_sinks
+  # 1) Logs da aplicação (ILogger). O log vai para journald/arquivos e é lido por operadores.
+  - patterns:
+      - pattern: $LOGGER.$METHOD(...)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^Log(Trace|Debug|Information|Warning|Error|Critical)?$
+  # 2) Saídas de depuração.
+  - pattern-either:
+      - pattern: Console.Write(...)
+      - pattern: Console.WriteLine(...)
+      - pattern: Console.Error.WriteLine(...)
+      - pattern: Debug.WriteLine(...)
+      - pattern: Trace.WriteLine(...)
+  # 3) Arquivos em disco sem proteção.
+  - patterns:
+      - pattern: File.$METHOD(...)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(WriteAllText|AppendAllText|WriteAllLines|AppendAllLines|WriteAllTextAsync|AppendAllTextAsync)$
+  # 4) HTTP para terceiros. Exceção: operadores de tratamento contratados e
+  #    necessários ao serviço (Expo Push — entrega do pedido de ajuda).
+  - patterns:
+      - pattern: $HTTP.$METHOD(...)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(GetAsync|GetStringAsync|PostAsync|PostAsJsonAsync|PutAsync|PutAsJsonAsync|PatchAsync|SendAsync)$
+      - pattern-not: $HTTP.$METHOD("=~/^https:\/\/exp\.host\//", ...)
+  # 5) Mensagens de exceção: viram texto em log, APM e, às vezes, na resposta de erro.
+  - patterns:
+      - pattern: new $EXCEPTION(...)
+      - metavariable-regex:
+          metavariable: $EXCEPTION
+          regex: .*Exception$
+
+x-sanitizers: &sanitizers
+  # Funções que transformam o dado em algo não reversível ou de baixa precisão.
+  - patterns:
+      - pattern-either:
+          - pattern: $FUNC(...)
+          - pattern: $OBJ.$FUNC(...)
+      - metavariable-regex:
+          metavariable: $FUNC
+          # metavariable-regex casa a partir do INÍCIO do nome; por isso o ".*".
+          regex: (?i).*(hash|mask|mascar|redact|anonimi|pseudonim|protect|encrypt|cifr|coarse|truncat)
+  # Comparações produzem só verdadeiro/falso, não o valor original.
+  - pattern-either:
+      - pattern: $A > $B
+      - pattern: $A < $B
+      - pattern: $A >= $B
+      - pattern: $A <= $B
+      - pattern: $A == $B
+      - pattern: $A != $B
+      - pattern: string.IsNullOrEmpty($A)
+      - pattern: string.IsNullOrWhiteSpace($A)
+
+x-source-names: &source_by_name
+  pattern-either:
+    - pattern: $OBJ.$NAME
+    - pattern: $NAME
+    # Campo lido dentro de um lambda: route.Select(p => p.Latitude) contamina o resultado.
+    - pattern: $COLLECTION.Select($ITEM => $ITEM.$NAME)
+
+rules:
+  # ---------------------------------------------------------------- SENHA ---
+  - id: hoodi-taint-password-leak
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Senha do cidadão chega a uma saída insegura ($NAME). Quem tiver acesso a
+      essa saída consegue entrar na conta. Nunca registre ou transmita senhas;
+      use apenas o hash (IPasswordHasher).
+    metadata:
+      pii_category: SENHA
+      lgpd: "Art. 46 (segurança)"
+      cwe: "CWE-532: Insertion of Sensitive Information into Log File"
+      owasp: "A09:2021 Security Logging and Monitoring Failures"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(senha|novasenha|senhaatual|password|newpassword|passwd|pwd)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
+
+  - id: hoodi-taint-password-in-response
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Senha devolvida na resposta HTTP. A resposta passa por proxies, cache do
+      app e ferramentas de depuração. Nunca devolva a senha, nem mascarada.
+    metadata:
+      pii_category: SENHA
+      lgpd: "Art. 46 (segurança)"
+      cwe: "CWE-200: Exposure of Sensitive Information"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(senha|novasenha|senhaatual|password|newpassword|passwd|pwd)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks:
+      - pattern-either:
+          - pattern: Ok(...)
+          - pattern: Created(...)
+          - pattern: Json(...)
+          - pattern: $CTX.Response.WriteAsJsonAsync(...)
+          - pattern: $CTX.Response.WriteAsync(...)
+
+  # ---------------------------------------------------------------- TOKEN ---
+  - id: hoodi-taint-token-leak
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Token de sessão/credencial ($NAME) chega a uma saída insegura. Com ele,
+      outra pessoa age em nome do cidadão sem precisar da senha.
+    metadata:
+      pii_category: TOKEN
+      lgpd: "Art. 46 (segurança)"
+      cwe: "CWE-532: Insertion of Sensitive Information into Log File"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(token|accesstoken|refreshtoken|jwt|bearer|pushtoken|expotoken|apikey|clientsecret|secret)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
+
+  # --------------------------------------------------------- LOCALIZAÇÃO ---
+  - id: hoodi-taint-location-leak
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Localização do cidadão ($NAME) chega a uma saída insegura. No hoodi, a
+      posição exata revela onde a pessoa mora, trabalha ou está pedindo ajuda.
+      Reduza a precisão (célula grossa) ou não registre.
+    metadata:
+      pii_category: LOCALIZACAO
+      lgpd: "Art. 5º, I (dado pessoal) e Art. 6º, III (necessidade)"
+      cwe: "CWE-359: Exposure of Private Personal Information"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(lat|latitude|lng|lon|longitude|coordenada|coordenadas|localizacao|location|geolocation|h3cell|h3index|celulah3|trajeto)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
+
+  # --------------------------------------------------------------- SAÚDE ---
+  - id: hoodi-taint-health-leak
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Dado de saúde ($NAME) chega a uma saída insegura. Saúde é dado pessoal
+      SENSÍVEL na LGPD e exige proteção reforçada.
+    metadata:
+      pii_category: SAUDE
+      lgpd: "Art. 5º, II e Art. 11 (dado sensível)"
+      cwe: "CWE-359: Exposure of Private Personal Information"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(bpm|batimento|batimentos|heartrate|frequenciacardiaca|spo2|oxigenacao|pressaoarterial|glicemia|saude|health)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
+
+  # ----------------------------------------------------------------- CPF ---
+  - id: hoodi-taint-cpf-leak
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      CPF ($NAME) chega a uma saída insegura. CPF vazado é usado em golpes,
+      abertura de contas e fraudes em nome do cidadão.
+    metadata:
+      pii_category: CPF
+      lgpd: "Art. 5º, I e Art. 46"
+      cwe: "CWE-359: Exposure of Private Personal Information"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(cpf|rg|cnh|documento)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
+
+  # ------------------------------------------------------ E-MAIL/CONTATO ---
+  - id: hoodi-taint-contact-leak
+    mode: taint
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      Dado de contato ($NAME) chega a uma saída insegura. Facilita spam e
+      phishing direcionado ao cidadão.
+    metadata:
+      pii_category: CONTATO
+      lgpd: "Art. 5º, I"
+      cwe: "CWE-359: Exposure of Private Personal Information"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(email|telefone|phone|celular)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
+
+  # ---------------------------------------------------------- DISPOSITIVO ---
+  - id: hoodi-taint-device-leak
+    mode: taint
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      Identificador do dispositivo ($NAME) chega a uma saída insegura. Ele
+      permite rastrear o mesmo relógio/celular ao longo do tempo.
+    metadata:
+      pii_category: DISPOSITIVO
+      lgpd: "Art. 5º, I (identificador)"
+      cwe: "CWE-359: Exposure of Private Personal Information"
+    pattern-sources:
+      - patterns:
+          - *source_by_name
+          - metavariable-regex:
+              metavariable: $NAME
+              regex: (?i)^(deviceid|instalacaoid|installationid|imei|macaddress)$
+    pattern-sanitizers: *sanitizers
+    pattern-sinks: *insecure_sinks
