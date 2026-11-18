@@ -94,8 +94,8 @@ public sealed class ProducerV2IntegrationTests
         using (var scope = factory.Services.CreateScope())
         {
             var risk = scope.ServiceProvider.GetRequiredService<IOptions<RiskSnapshotOptions>>().Value; risk.ImporterUserIds = [user];
-            // Defaults are the v3 release; v2 is the rollback release and must be approved explicitly (Risk__Approved*).
-            if (contract == 2) { risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256; risk.ApprovedManifestSha256 = Sha(Bytes(2, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(2, "fixture_v2.json")); }
+            // Defaults are the v2 release; v3 (phase 2) must be approved explicitly (Risk__Approved*).
+            if (contract == 3) { risk.ApprovedCsvSha256 = ProducerV2Decoder.DeliveredSha256V3; risk.ApprovedManifestSha256 = Sha(Bytes(3, "manifest.json")); risk.ApprovedFixtureSha256 = Sha(Bytes(3, "fixture_v3.json")); }
         }
         Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: contract == 2 ? "nando-v3-2026-abr-set" : "nando-v2-2026-jan-set"))).StatusCode);
 Assert.Equal(HttpStatusCode.BadRequest, (await op.PostAsync("/v1/admin/risco/importar", Upload(contract, label: "nando-v2-v3-2026"))).StatusCode);

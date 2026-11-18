@@ -39,7 +39,7 @@ paths:
         schema: {type: string}
       responses:
         '200':
-          description: Complete risco_h3_faixa_v{N}.csv (v3 current, v2 rollback; N = manifest.contrato_versao)
+          description: Complete risco_h3_faixa_v{N}.csv (v2 delivered default, v3 accepted for phase 2; N = manifest.contrato_versao)
           headers:
             ETag:
               schema: {type: string}

@@ -41,7 +41,7 @@ Esse procedimento ainda não foi ensaiado numa VM: teste a restauração antes d
 ## Snapshot de risco
 
 Num banco novo, `GET /v1/risco/grade` responde `404 SNAPSHOT_INDISPONIVEL` até a importação (`POST /v1/admin/risco/importar`).
-O smoke test avisa quando isso acontece. Os hashes aprovados padrão são os do contrato v3 (`data/risk/v3/SOURCE.md`); os do v2 (`data/risk/v2/SOURCE.md`) servem para rollback via `Risk__Approved*`.
+O smoke test avisa quando isso acontece. Os hashes aprovados padrão são os do contrato v2 (`data/risk/v2/SOURCE.md`), o fechado na entrega; os do v3 semestral (`data/risk/v3/SOURCE.md`) são aceitos pelo decoder para a fase 2, via `Risk__Approved*`.
 
 ## Verificação após cada deploy
 

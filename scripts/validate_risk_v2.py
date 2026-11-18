@@ -10,7 +10,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 root = Path(__file__).resolve().parents[1]
-VERSION = sys.argv[1] if len(sys.argv) > 1 else "v3"   # v2 = rollback release, v3 = current
+VERSION = sys.argv[1] if len(sys.argv) > 1 else "v2"   # v2 = delivery release (default), v3 = phase 2 candidate
 require_version = {"v2", "v3"}
 if VERSION not in require_version:
     raise SystemExit("usage: validate_risk_v2.py [v2|v3]")
