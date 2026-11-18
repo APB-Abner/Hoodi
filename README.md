@@ -145,12 +145,14 @@ O provedor SQLite não traduz ordenação/comparações de `DateTimeOffset` como
 
 ## Validação e pendências
 
-Última execução: 163 testes .NET passaram neste incremento; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/route-cohesion-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
+Última execução completa: 187 testes .NET passaram, sem falhas ou testes ignorados; os 16 testes dos módulos do Pet passaram na entrega anterior. Modelo EF e migration estão consistentes; contratos passaram em modo normal e com `python -O`. A suíte cobre exclusão/rollback, autorização, pânico idempotente, retenção, secure_delete e falhas simuladas de Expo, além das funcionalidades anteriores. Evidência local: `artifacts/test-results/route-cohesion-full.trx` (ignorada pelo Git). No Windows restrito, o destino Event Log foi desabilitado apenas no processo de testes (`Logging__EventLog__LogLevel__Default=None`).
 
 ```powershell
 dotnet test Hoodi.slnx --no-restore
 dotnet ef migrations has-pending-model-changes --project Hoodi.Infrastructure --startup-project Hoodi.Api -- --environment Development
 ```
+
+A suíte completa também foi reexecutada sobre o código do commit `ecb1a43`: **187/187 passaram**. Evidência local: `artifacts/test-results/ecb1a43-review-full.trx`. Após separar `ApiInfo`, os **23/23 testes de implantação e de cabeçalhos passaram**, incluindo a igualdade de versão entre `/health` e OpenAPI. Evidência local: `artifacts/test-results/api-info-review.trx`.
 
 Os testes usam dados sintéticos, arquivos SQLite isolados, migration real e relógio controlável. Os testes adicionais recriam o host em Production com o mesmo banco/chaves, verificam JWT e replay após reinício, preservação de e-mail pendente, forwarded headers, limites por cliente e respostas 409/500.
 

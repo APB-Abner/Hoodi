@@ -1,11 +1,5 @@
 namespace Hoodi.Api.Seguranca;
 
-/// <summary>Versão única da API: usada pelo OpenAPI e pelo /health.</summary>
-public static class ApiInfo
-{
-    public const string Versao = "0.6.0-draft";
-}
-
 /// <summary>
 /// Cabeçalhos de segurança em toda resposta. A API devolve JSON (ou a página do Scalar), nunca é embutida em frame
 /// e não deve ser guardada em cache de proxy: respostas contêm dados de conta e de localização.
