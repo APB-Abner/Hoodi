@@ -2,9 +2,10 @@ using System.Globalization;
 using System.Text.Json;
 using Hoodi.Application.Lugares;
 using Hoodi.Application.Rotas;
+using Hoodi.Infrastructure.Rotas;
 using Microsoft.Extensions.Options;
 
-namespace Hoodi.Infrastructure.Rotas;
+namespace Hoodi.Infrastructure.Lugares;
 
 /// <summary>Busca de endereços e lugares (Pelias do HeiGIT/openrouteservice). Chave só no servidor; nada é guardado.</summary>
 public sealed class HeigitPlacesProvider(HttpClient client, IOptions<RotasOptions> options) : IProvedorLugares

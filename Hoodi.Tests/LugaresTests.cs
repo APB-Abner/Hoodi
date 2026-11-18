@@ -5,6 +5,7 @@ using Hoodi.Application.Errors;
 using Hoodi.Application.Lugares;
 using Hoodi.Application.Risk;
 using Hoodi.Application.Rotas;
+using Hoodi.Infrastructure.Lugares;
 using Hoodi.Infrastructure.Rotas;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
