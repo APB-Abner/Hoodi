@@ -337,7 +337,7 @@ Os testes usam apenas dados sintéticos e `TimeProvider` controlável. Em Window
 
 ## Evidências
 
-A API está implantada na VM de demonstração atrás do nginx. Capturas em [`infra/evidence`](infra/evidence):
+A API está implantada na VM de demonstração atrás do nginx, em https://hoodi-api.canadacentral.cloudapp.azure.com (certificado Let's Encrypt). A documentação interativa fica em `/scalar`. Capturas em [`infra/evidence`](infra/evidence):
 
 | Evidência | Arquivo |
 | --- | --- |
@@ -361,8 +361,8 @@ Também foram validados na VM: a importação da grade v2 com o hash aprovado, u
 
 ## Limitações conhecidas
 
-- **Transporte:** a VM de demonstração usa HTTP por IP, sem TLS. O modelo com HTTPS está em `deploy/nginx.conf.example` e exige domínio e certificado confiável.
-- **Notificações:** o envio real ao Expo vem desligado (`Panico__EnvioExpoHabilitado=false`) até haver tokens válidos do app. A fila pendente não equivale a entrega.
+- **Transporte:** o acesso pelo domínio usa HTTPS. O acesso direto pelo IP da VM continua em HTTP, sem redirecionamento, porque o certificado vale só para o domínio. Clientes devem usar o domínio.
+- **Notificações:** o envio real ao Expo vem desligado por padrão (`Panico__EnvioExpoHabilitado=false`) e está ligado na VM de demonstração. A entrega depende de tokens válidos registrados pelo app, e um despacho na fila não equivale a entrega.
 - **Instância única:** rate limiting e cache da grade ficam em memória, o que pressupõe uma só instância da API.
 - **Área da grade:** o perímetro de 5 × 5 km tem centro provisório na Av. Paulista. Fora dele, o risco é sempre "desconhecido".
 - **Pendências de app:** os deep links de confirmação, recuperação e convite (`hoodi://`) dependem de implementação no aplicativo. A autenticação própria de dispositivos ainda não existe; o Pet se comunica apenas com o app.
