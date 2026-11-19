@@ -1,4 +1,6 @@
 $ semgrep scan --config security/rules --severity ERROR --error security/fixtures/LeakyPrototype
+ • Findings: 13 (13 blocking)
+Ran 7 rules on 2 files: 13 findings.
    ❯❯❱ security.rules.hoodi-pii-hardcoded-secret
           ❰❰ Blocking ❱❱
            13┆ private const string ApiKey = "sk_live_FAKE_hoodi_0000000000000000";
@@ -10,45 +12,37 @@ $ semgrep scan --config security/rules --severity ERROR --error security/fixture
            22┆ logger.LogError("Falha ao exportar; token={Token}", refreshToken);
    ❯❯❱ security.rules.hoodi-taint-location-leak
           ❰❰ Blocking ❱❱
-           37┆ _logger.LogInformation("Telemetria recebida em {Lat},{Lng}", input.Latitude,
+           38┆ _logger.LogInformation("Evento do Pet recebido em {Lat},{Lng}", input.Latitude,
             ⋮┆----------------------------------------
    ❯❯❱ security.rules.hoodi-taint-location-leak
           ❰❰ Blocking ❱❱
-           37┆ _logger.LogInformation("Telemetria recebida em {Lat},{Lng}", input.Latitude,
-   ❯❯❱ security.rules.hoodi-taint-health-leak
-          ❰❰ Blocking ❱❱
-           41┆ _logger.LogWarning($"Batimento alterado: {bpm} bpm");
-            ⋮┆----------------------------------------
-   ❯❯❱ security.rules.hoodi-taint-health-leak
-          ❰❰ Blocking ❱❱
-           41┆ _logger.LogWarning($"Batimento alterado: {bpm} bpm");
-   ❯❯❱ security.rules.hoodi-taint-location-leak
-          ❰❰ Blocking ❱❱
-           45┆ await _http.GetAsync(url);
+           38┆ _logger.LogInformation("Evento do Pet recebido em {Lat},{Lng}", input.Latitude,
             ⋮┆----------------------------------------
    ❯❯❱ security.rules.hoodi-taint-location-leak
           ❰❰ Blocking ❱❱
-           45┆ await _http.GetAsync(url);
+           46┆ await _http.GetAsync(url);
+            ⋮┆----------------------------------------
+   ❯❯❱ security.rules.hoodi-taint-location-leak
+          ❰❰ Blocking ❱❱
+           46┆ await _http.GetAsync(url);
    ❯❯❱ security.rules.hoodi-taint-cpf-leak
           ❰❰ Blocking ❱❱
-           48┆ await _http.PostAsJsonAsync("https://crm.example.invalid/leads", new { cpf = input.Cpf,
+           49┆ await _http.PostAsJsonAsync("https://crm.example.invalid/leads", new { cpf = input.Cpf, pet
             ⋮┆----------------------------------------
    ❯❯❱ security.rules.hoodi-taint-cpf-leak
           ❰❰ Blocking ❱❱
-           48┆ await _http.PostAsJsonAsync("https://crm.example.invalid/leads", new { cpf = input.Cpf,
+           49┆ await _http.PostAsJsonAsync("https://crm.example.invalid/leads", new { cpf = input.Cpf, pet
             ⋮┆----------------------------------------
    ❯❯❱ security.rules.hoodi-taint-cpf-leak
           ❰❰ Blocking ❱❱
-           51┆ Console.WriteLine("debug cpf=" + input.Cpf);
+           52┆ Console.WriteLine("debug cpf=" + input.Cpf);
    ❯❯❱ security.rules.hoodi-taint-password-leak
           ❰❰ Blocking ❱❱
-           60┆ _logger.LogDebug("Novo cadastro {Email} com senha {Senha}", signup.Email, signup.Senha);
+           61┆ _logger.LogDebug("Novo cadastro {Email} com senha {Senha}", signup.Email, signup.Senha);
    ❯❯❱ security.rules.hoodi-taint-cpf-leak
           ❰❰ Blocking ❱❱
-           64┆ throw new InvalidOperationException("Cadastro inválido para o CPF " + signup.Cpf);
+           65┆ throw new InvalidOperationException("Cadastro inválido para o CPF " + signup.Cpf);
    ❯❯❱ security.rules.hoodi-taint-password-in-response
           ❰❰ Blocking ❱❱
-           67┆ return Ok(new { mensagem = "ok", senhaCadastrada = signup.Senha });
- • Findings: 15 (15 blocking)
-Ran 7 rules on 2 files: 15 findings.
+           68┆ return Ok(new { mensagem = "ok", senhaCadastrada = signup.Senha });
 exit code: 1 (pipeline BLOQUEADO)

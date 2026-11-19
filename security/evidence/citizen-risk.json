@@ -1,5 +1,5 @@
 {
-  "generated_at": "18/11/2026 10:15",
+  "generated_at": "19/11/2026 10:21",
   "levels": [
     [
       75,
@@ -47,23 +47,22 @@
       "title": "Protótipo vulnerável",
       "score": 100,
       "level": "Crítico",
-      "raw_points": 96.1,
+      "raw_points": 92.6,
       "exposures": 18,
-      "blocking": 11,
+      "blocking": 10,
       "by_category": {
         "LOCALIZACAO": 30.6,
         "TOKEN": 14.4,
         "CPF": 20.0,
         "SENHA": 17.3,
-        "SAUDE": 6.3,
-        "DISPOSITIVO": 4.0,
+        "DISPOSITIVO": 6.8,
         "CONTATO": 3.5
       },
       "by_sink": {
         "LATENTE_TOSTRING": 0.9,
         "SEGREDO_NO_CODIGO": 8.1,
         "ARQUIVO": 8.0,
-        "LOG": 30.1,
+        "LOG": 26.6,
         "DADO_FIXO": 3.2,
         "URL": 5.0,
         "HTTP_TERCEIRO": 22.0,
@@ -91,9 +90,8 @@
       "by_sink": {},
       "inventory": {
         "CPF": 1,
-        "DISPOSITIVO": 1,
-        "SAUDE": 1,
-        "LOCALIZACAO": 2
+        "LOCALIZACAO": 2,
+        "DISPOSITIVO": 1
       }
     },
     "mutacao": {

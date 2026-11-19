@@ -35,8 +35,10 @@ OUTPUT = SECURITY_DIR / "evidence" / "ai-alerts.json"
 TARGETS = ["api", "prototipo-vulneravel", "prototipo-corrigido", "mutacao"]
 MODEL = "claude-opus-5-5"
 
-SYSTEM_PROMPT = """Você é analista de privacidade do hoodi, um app brasileiro que avisa pelo relógio \
-ou celular quando a pessoa entra em área de risco e permite pedir ajuda a contatos de confiança. \
+SYSTEM_PROMPT = """Você é analista de privacidade do hoodi, um app brasileiro que avisa pelo \
+Hoodi Pet (um bichinho de bolso, estilo tamagotchi, que vibra e muda de carinha) e pelo celular quando \
+a pessoa entra em área de risco, e permite pedir ajuda a contatos de confiança (pelo app ou segurando \
+o botão do Pet). O Pet não tem GPS nem sensores de saúde: a localização vem do celular. \
 Os usuários são cidadãos comuns, muitos em situação de vulnerabilidade.
 
 Você recebe um achado de análise estática (Semgrep) sobre dado pessoal chegando a uma saída insegura. \
@@ -81,14 +83,14 @@ TEMPLATES = {
                    "Quem tiver acesso a esses registros poderia descobrir onde você mora ou onde pediu ajuda.",
     "SENHA": "Sua senha pode ficar visível para quem não deveria vê-la. "
              "Com ela, outra pessoa conseguiria entrar na sua conta do hoodi.",
-    "SAUDE": "Informações sobre a sua saúde, como os batimentos do relógio, podem ficar expostas. "
+    "SAUDE": "Informações sobre a sua saúde, como batimentos ou exames, podem ficar expostas. "
              "Esse tipo de dado tem proteção especial por lei.",
     "TOKEN": "Uma chave que mantém você conectado pode ficar exposta. "
              "Com ela, alguém poderia usar o app como se fosse você, sem saber sua senha.",
     "CPF": "Seu CPF pode ser enviado ou guardado sem proteção. "
            "CPF vazado é usado em golpes e fraudes em seu nome.",
     "CONTATO": "Seu e-mail ou telefone pode ficar exposto e ser usado para mensagens falsas que parecem do hoodi.",
-    "DISPOSITIVO": "O identificador do seu relógio ou celular pode ficar exposto, permitindo acompanhar o aparelho ao longo do tempo.",
+    "DISPOSITIVO": "O identificador do seu Hoodi Pet ou celular pode ficar exposto, permitindo acompanhar o aparelho ao longo do tempo.",
     "NOME": "Seu nome pode aparecer em registros internos sem necessidade.",
 }
 FIXES = {
@@ -168,7 +170,7 @@ CATEGORY_KEYWORDS = {
     "TOKEN": ("credencial", "chave", "token", "acesso", "sessão", "conectado"),
     "CPF": ("cpf",),
     "CONTATO": ("e-mail", "email", "telefone", "contato"),
-    "DISPOSITIVO": ("dispositivo", "aparelho", "relógio", "celular", "identificador"),
+    "DISPOSITIVO": ("dispositivo", "aparelho", "hoodi pet", "celular", "identificador"),
     "NOME": ("nome",),
 }
 
