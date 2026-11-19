@@ -1,0 +1,97 @@
+# =============================================================================
+# hoodi — Mapeamento de PII (motor de parsing)
+# -----------------------------------------------------------------------------
+# Estas regras NÃO seguem fluxo; elas localizam ONDE o dado pessoal existe ou
+# está exposto por construção. Servem para:
+#   1. Inventário de PII (onde cada categoria de dado vive no código)  -> INFO
+#   2. Exposições estruturais (segredo fixo, CPF real, record com ToString) -> WARNING/ERROR
+# A categoria do inventário é classificada pelo nome do campo em
+# security/scripts/taxonomy.py (mesmos padrões das regras de taint).
+# =============================================================================
+rules:
+  # 1) INVENTÁRIO — propriedades de classes/entidades com nome de dado pessoal.
+  - id: hoodi-pii-inventory-property
+    languages: [csharp]
+    severity: INFO
+    message: "Propriedade com dado pessoal declarada"
+    metadata:
+      kind: inventory
+    # Padrões estruturais de propriedade ({ get; set; }) não são aceitos pelo
+    # parser de padrões C# do Semgrep, então a declaração é localizada por regex.
+    pattern-regex: (?i)\bpublic\s+[\w<>?,\[\]]+\s+(Senha|SenhaHash|Password|Token|TokenHash|RefreshToken|ExpoToken|ExpoTokenHash|Cpf|Rg|Email|Telefone|Nome|Latitude|Longitude|H3Cell|CelulaH3|HeartRate|Batimento|Bpm|Spo2|DeviceId|InstalacaoId)\s*\{\s*get
+
+  # 2) INVENTÁRIO — parâmetros posicionais de records (DTOs de entrada/saída).
+  #    O parser C# do Semgrep não casa padrões estruturais de record, então usamos regex.
+  - id: hoodi-pii-inventory-record
+    languages: [csharp]
+    severity: INFO
+    message: "Parâmetro de record com dado pessoal"
+    metadata:
+      kind: inventory
+    pattern-regex: (?i)\brecord\s+\w+\s*\((?:[^()]|\([^()]*\))*?\b(?:string|double|int|long|Guid)\??\s+(Senha|NovaSenha|Password|Token|RefreshToken|AccessToken|Cpf|Email|Nome|TitularNome|Latitude|Longitude|H3Cell|HeartRate|Batimento|DeviceId|InstalacaoId)\b
+
+  # 3) record com dado SENSÍVEL e sem ToString() próprio.
+  #    O C# gera ToString() automático listando TODAS as propriedades, então
+  #    um simples logger.LogInformation("{Entrada}", entrada) imprime a senha.
+  - id: hoodi-pii-record-tostring-exposure
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      Record com dado sensível sem ToString() próprio. O ToString() gerado pelo
+      compilador imprime todos os campos (inclusive senha/localização) se o
+      objeto for logado ou interpolado. Sobrescreva ToString/PrintMembers.
+    metadata:
+      pii_category: SENHA_LOCALIZACAO_CPF
+      cwe: "CWE-532: Insertion of Sensitive Information into Log File"
+    pattern-regex: (?s)\brecord\s+\w+\s*\((?:[^()]|\([^()]*\))*?\b(?:string|double|int)\??\s+(?:Senha|NovaSenha|Password|Cpf|Latitude|Longitude|HeartRate|RefreshToken)\b(?:[^()]|\([^()]*\))*\)\s*(?:;|\{(?:(?!ToString|PrintMembers)[^}])*\})
+
+  # 4) CPF formatado escrito no código/configuração.
+  - id: hoodi-pii-cpf-literal
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      CPF escrito diretamente em arquivo do repositório. Se for real, é
+      vazamento; se for de teste, prefira geradores de CPF fictício.
+    metadata:
+      pii_category: CPF
+      lgpd: "Art. 5º, I"
+    pattern-regex: \b\d{3}\.\d{3}\.\d{3}-\d{2}\b
+    paths:
+      exclude: ["*.md", "*.yml", "*.yaml"]
+
+  # 5) Segredo/credencial fixa no código.
+  - id: hoodi-pii-hardcoded-secret
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Credencial fixa no código ($NAME). Qualquer pessoa com acesso ao
+      repositório passa a ter a credencial. Use variável de ambiente ou
+      /etc/hoodi/hoodi.env (como já faz a chave JWT).
+    metadata:
+      pii_category: TOKEN
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+    patterns:
+      - pattern-either:
+          - pattern: const string $NAME = "$VALUE";
+          - pattern: string $NAME = "$VALUE";
+          - pattern: $NAME = "$VALUE"
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i)(apikey|api_key|secret|senha|password|passwd|connectionstring|jwtkey|signingkey)
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^.{8,}$
+
+  # 6) Dado pessoal em query string (vai para logs de proxy, histórico e Referer).
+  - id: hoodi-pii-query-string
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      Dado pessoal em parâmetro de URL. Query strings ficam gravadas em logs
+      de nginx/proxies e no histórico. Envie no corpo da requisição (POST).
+    metadata:
+      pii_category: LOCALIZACAO
+      cwe: "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+    pattern-regex: (?i)[?&](lat|lng|lon|latitude|longitude|cpf|senha|password|token|email)=
+    paths:
+      include: ["*.cs", "*.ts", "*.tsx", "*.js"]

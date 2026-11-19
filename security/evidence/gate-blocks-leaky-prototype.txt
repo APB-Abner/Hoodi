@@ -1,0 +1,54 @@
+$ semgrep scan --config security/rules --severity ERROR --error security/fixtures/LeakyPrototype
+   ❯❯❱ security.rules.hoodi-pii-hardcoded-secret
+          ❰❰ Blocking ❱❱
+           13┆ private const string ApiKey = "sk_live_FAKE_hoodi_0000000000000000";
+   ❯❯❱ security.rules.hoodi-taint-location-leak
+          ❰❰ Blocking ❱❱
+           19┆ File.AppendAllText("/tmp/hoodi-routes.csv", $"{userId},{cells}\n");
+   ❯❯❱ security.rules.hoodi-taint-token-leak
+          ❰❰ Blocking ❱❱
+           22┆ logger.LogError("Falha ao exportar; token={Token}", refreshToken);
+   ❯❯❱ security.rules.hoodi-taint-location-leak
+          ❰❰ Blocking ❱❱
+           37┆ _logger.LogInformation("Telemetria recebida em {Lat},{Lng}", input.Latitude,
+            ⋮┆----------------------------------------
+   ❯❯❱ security.rules.hoodi-taint-location-leak
+          ❰❰ Blocking ❱❱
+           37┆ _logger.LogInformation("Telemetria recebida em {Lat},{Lng}", input.Latitude,
+   ❯❯❱ security.rules.hoodi-taint-health-leak
+          ❰❰ Blocking ❱❱
+           41┆ _logger.LogWarning($"Batimento alterado: {bpm} bpm");
+            ⋮┆----------------------------------------
+   ❯❯❱ security.rules.hoodi-taint-health-leak
+          ❰❰ Blocking ❱❱
+           41┆ _logger.LogWarning($"Batimento alterado: {bpm} bpm");
+   ❯❯❱ security.rules.hoodi-taint-location-leak
+          ❰❰ Blocking ❱❱
+           45┆ await _http.GetAsync(url);
+            ⋮┆----------------------------------------
+   ❯❯❱ security.rules.hoodi-taint-location-leak
+          ❰❰ Blocking ❱❱
+           45┆ await _http.GetAsync(url);
+   ❯❯❱ security.rules.hoodi-taint-cpf-leak
+          ❰❰ Blocking ❱❱
+           48┆ await _http.PostAsJsonAsync("https://crm.example.invalid/leads", new { cpf = input.Cpf,
+            ⋮┆----------------------------------------
+   ❯❯❱ security.rules.hoodi-taint-cpf-leak
+          ❰❰ Blocking ❱❱
+           48┆ await _http.PostAsJsonAsync("https://crm.example.invalid/leads", new { cpf = input.Cpf,
+            ⋮┆----------------------------------------
+   ❯❯❱ security.rules.hoodi-taint-cpf-leak
+          ❰❰ Blocking ❱❱
+           51┆ Console.WriteLine("debug cpf=" + input.Cpf);
+   ❯❯❱ security.rules.hoodi-taint-password-leak
+          ❰❰ Blocking ❱❱
+           60┆ _logger.LogDebug("Novo cadastro {Email} com senha {Senha}", signup.Email, signup.Senha);
+   ❯❯❱ security.rules.hoodi-taint-cpf-leak
+          ❰❰ Blocking ❱❱
+           64┆ throw new InvalidOperationException("Cadastro inválido para o CPF " + signup.Cpf);
+   ❯❯❱ security.rules.hoodi-taint-password-in-response
+          ❰❰ Blocking ❱❱
+           67┆ return Ok(new { mensagem = "ok", senhaCadastrada = signup.Senha });
+ • Findings: 15 (15 blocking)
+Ran 7 rules on 2 files: 15 findings.
+exit code: 1 (pipeline BLOQUEADO)

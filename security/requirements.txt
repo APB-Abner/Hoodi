@@ -1,0 +1,4 @@
+# Dependências do módulo de segurança (bash security/scripts/setup.sh)
+semgrep==1.185.0
+anthropic==2.9.0
+pydantic==2.14.3
