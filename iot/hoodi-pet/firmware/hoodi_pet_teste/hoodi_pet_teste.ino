@@ -1,13 +1,15 @@
-// hoodi Pet - teste de bancada (OLED + vibracao + botao)
+// hoodi Pet - teste de bancada (OLED + vibracao + alto-falante + 3 botoes)
 // Placa: "ESP32C3 Dev Module" | Tools > USB CDC On Boot: Enabled (senao o Serial nao aparece)
 // Bibliotecas: Adafruit SSD1306 + Adafruit GFX (Library Manager)
-// Ligacoes (doc consolidado): OLED SDA=GPIO6, SCL=GPIO7 | Vibracao IN=GPIO3 | Botao GPIO4->GND
+// Ligacoes (carcaca v7b): OLED SDA=GPIO6, SCL=GPIO7 | Vibracao IN=GPIO3 | Alto-falante: GPIO5 -> 1k -> base do NPN
+// Botoes para GND: 1 = GPIO4 (troca o nivel), 2 = GPIO10 (bipe de teste), 3 = GPIO20 (vibra e bipa: "ajuda")
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-const int PINO_SDA = 6, PINO_SCL = 7, PINO_VIB = 3, PINO_BOTAO = 4;
+const int PINO_SDA = 6, PINO_SCL = 7, PINO_VIB = 3, PINO_SOM = 5;
+const int PINO_BOTAO = 4, PINO_BOTAO_2 = 10, PINO_BOTAO_3 = 20;
 Adafruit_SSD1306 tela(128, 64, &Wire, -1);
 int nivel = 0;  // 0 tranquila, 1 atenta, 2 preocupada, 3 em alerta
 
@@ -36,7 +38,17 @@ void desenharCarinha(int n) {
 }
 
 void vibrar(int n) {                                   // n pulsos curtos; nivel 0 nao vibra
-  for (int i = 0; i < n; i++) { digitalWrite(PINO_VIB, HIGH); delay(200); digitalWrite(PINO_VIB, LOW); delay(150); }
+  for (int i = 0; i < n; i++) {
+    digitalWrite(PINO_VIB, HIGH); tone(PINO_SOM, 2000); delay(200);
+    digitalWrite(PINO_VIB, LOW); noTone(PINO_SOM); delay(150);
+  }
+}
+
+bool apertou(int pino) {                               // espera soltar (debounce simples)
+  if (digitalRead(pino) != LOW) return false;
+  delay(30);
+  while (digitalRead(pino) == LOW) delay(5);
+  return true;
 }
 
 void setup() {
@@ -44,17 +56,21 @@ void setup() {
   delay(1500);                                         // tempo do USB CDC subir
   pinMode(PINO_VIB, OUTPUT); digitalWrite(PINO_VIB, LOW);
   pinMode(PINO_BOTAO, INPUT_PULLUP);
+  pinMode(PINO_BOTAO_2, INPUT_PULLUP);
+  pinMode(PINO_BOTAO_3, INPUT_PULLUP);
   Wire.begin(PINO_SDA, PINO_SCL);
   escanearI2C();
   if (!tela.begin(SSD1306_SWITCHCAPVCC, 0x3C)) Serial.println("OLED nao respondeu em 0x3C (tentar 0x3D).");
   desenharCarinha(nivel);
-  Serial.println("Aperte o botao (ou mande 0-3 pelo Serial) para trocar o nivel.");
+  Serial.println("Botao 1 (ou 0-3 pelo Serial) troca o nivel | botao 2 bipa | botao 3 vibra e bipa.");
 }
 
 void loop() {
   int novo = -1;
   if (Serial.available()) { char c = Serial.read(); if (c >= '0' && c <= '3') novo = c - '0'; }
-  if (digitalRead(PINO_BOTAO) == LOW) { delay(30); while (digitalRead(PINO_BOTAO) == LOW) delay(5); novo = (nivel + 1) % 4; }
+  if (apertou(PINO_BOTAO)) novo = (nivel + 1) % 4;
+  if (apertou(PINO_BOTAO_2)) { Serial.println("botao 2 (GPIO10)"); tone(PINO_SOM, 2500, 150); }
+  if (apertou(PINO_BOTAO_3)) { Serial.println("botao 3 (GPIO20)"); vibrar(1); }
   if (novo >= 0) {
     nivel = novo;
     Serial.printf("nivel=%d\n", nivel);
