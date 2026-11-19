@@ -1,10 +1,11 @@
-// Testes no PC do protocolo, da vibracao e do botao (sem placa).
+// Testes no PC do protocolo, da vibracao, do som e do botao (sem placa).
 // Rodar: g++ -std=c++17 -Wall -Wextra -Werror -I../firmware/hoodi_pet protocolo_test.cpp -o t && ./t
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include "protocolo.h"
+#include "som.h"
 #include "vibracao.h"
 
 using namespace hoodi;
@@ -158,6 +159,49 @@ static void testeVibrador() {
   CHECA(!v.atualizar(1) && !v.ativo());
 }
 
+static void testeSom() {
+  // O som acompanha a vibracao do alerta; o resto nao toca.
+  CHECA(toqueDoPadrao(Padrao::Curto) == Toque::Nivel1);
+  CHECA(toqueDoPadrao(Padrao::Duplo) == Toque::Nivel2);
+  CHECA(toqueDoPadrao(Padrao::Longo) == Toque::Nivel3);
+  CHECA(toqueDoPadrao(Padrao::Identificar) == Toque::Identificar);
+  CHECA(toqueDoPadrao(Padrao::PerdeuConexao) == Toque::PerdeuConexao);
+  CHECA(toqueDoPadrao(Padrao::Nenhum) == Toque::Nenhum);
+
+  Som s;
+  CHECA(s.atualizar(0) == 0 && !s.ativo());
+  s.iniciar(Toque::Nivel2, 1000);  // 120 tom, 100 silencio, 120 tom
+  CHECA(s.ativo());
+  CHECA(s.atualizar(1000) == 2000);
+  CHECA(s.atualizar(1119) == 2000);
+  CHECA(s.atualizar(1120) == 0 && s.ativo());
+  CHECA(s.atualizar(1220) == 2000);
+  CHECA(s.atualizar(1340) == 0 && !s.ativo());
+  // Toque::Nenhum nao interrompe o que esta tocando.
+  s.iniciar(Toque::Nivel3, 0);
+  s.iniciar(Toque::Nenhum, 10);
+  CHECA(s.ativo() && s.atualizar(10) == 2600);
+  // Loop atrasado termina sem travar; millis() dando a volta no u32.
+  CHECA(s.atualizar(100000) == 0 && !s.ativo());
+  s.iniciar(Toque::Nivel1, 0xFFFFFFF0u);
+  CHECA(s.atualizar(0x00000010u) == 2000);
+  CHECA(s.atualizar(0x00000068u) == 0);
+  // Silenciar corta na hora.
+  s.iniciar(Toque::Identificar, 0);
+  s.parar();
+  CHECA(s.atualizar(1) == 0 && !s.ativo());
+  // Todo toque que existe tem notas, termina em tempo finito e nao passa de 1,5 s.
+  const Toque todos[] = {Toque::Nivel1, Toque::Nivel2, Toque::Nivel3, Toque::Identificar, Toque::PerdeuConexao,
+                         Toque::Pin, Toque::Pareado, Toque::Ajuda, Toque::AjudaSemCelular};
+  for (Toque t : todos) {
+    size_t n = 0;
+    const Nota* notas = notasDoToque(t, n);
+    uint32_t duracao = 0;
+    for (size_t i = 0; notas != nullptr && i < n; i++) duracao += notas[i].ms;
+    CHECA(notas != nullptr && n > 0 && duracao > 0 && duracao <= 1500);
+  }
+}
+
 static void testeBotao() {
   using E = Botao::Evento;
   Botao b(3000, 30);
@@ -191,6 +235,7 @@ int main() {
   testeStatusEEvento();
   testeSequenciador();
   testeVibrador();
+  testeSom();
   testeBotao();
   std::printf("%d/%d verificacoes passaram\n", total - falhas, total);
   return falhas == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
