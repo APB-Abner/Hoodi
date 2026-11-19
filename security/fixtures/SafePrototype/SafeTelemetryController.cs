@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Hoodi.Security.Fixtures.Safe;
 
-public sealed record TelemetryInput(string DeviceId, double Latitude, double Longitude, int HeartRate, string Cpf)
+public sealed record TelemetryInput(string PetId, double Latitude, double Longitude, string Cpf)
 {
     // Records geram ToString() com todas as propriedades; aqui ele é sobrescrito.
     public override string ToString() => "TelemetryInput { dados sensíveis omitidos }";
@@ -28,12 +28,12 @@ public sealed class SafeTelemetryController(ILogger<SafeTelemetryController> log
     [HttpPost]
     public async Task<IActionResult> Receive([FromBody] TelemetryInput input)
     {
-        logger.LogInformation("Telemetria recebida na região {Area}", PiiMask.CoarseLocation(input.Latitude, input.Longitude));
+        logger.LogInformation("Evento do Pet recebido na região {Area}", PiiMask.CoarseLocation(input.Latitude, input.Longitude));
 
-        var heartAlert = input.HeartRate > 150;
-        logger.LogWarning("Alerta de batimento: {Alert}", heartAlert ? "sim" : "não");
+        var pet = PiiMask.Hash(input.PetId);
+        logger.LogWarning("Botão de ajuda segurado no Pet {Pet}", pet);
 
-        await http.PostAsJsonAsync("https://crm.example.invalid/leads", new { device = PiiMask.Hash(input.DeviceId) });
+        await http.PostAsJsonAsync("https://crm.example.invalid/leads", new { pet = PiiMask.Hash(input.PetId) });
         Console.WriteLine("debug cpf=" + PiiMask.MaskCpf(input.Cpf));
         return Accepted();
     }

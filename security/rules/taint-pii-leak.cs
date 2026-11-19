@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
 public sealed record LoginInput(string Email, string Senha);
-public sealed record PanicInput(double Latitude, double Longitude, string DeviceId);
+public sealed record PanicInput(double Latitude, double Longitude, string DeviceId, string PetId);
 
 public class TaintCases : ControllerBase
 {
@@ -90,6 +90,10 @@ public class TaintCases : ControllerBase
         logger.LogInformation("device {D}", entrada.DeviceId);
         // ok: hoodi-taint-device-leak
         logger.LogInformation("device {D}", PiiMask.Hash(entrada.DeviceId));
+        // ruleid: hoodi-taint-device-leak
+        logger.LogWarning($"botão de ajuda do Pet {entrada.PetId}");
+        // ok: hoodi-taint-device-leak
+        logger.LogWarning("botão de ajuda do Pet {P}", PiiMask.Hash(entrada.PetId));
     }
 
     public void Contact(LoginInput entrada)

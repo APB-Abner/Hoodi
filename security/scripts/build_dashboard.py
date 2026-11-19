@@ -24,7 +24,7 @@ DASHBOARD = SECURITY_DIR / "dashboard" / "index.html"
 
 TARGETS = {
     "api": ("API hoodi (código real)", "Hoodi.Api, Application, Domain e Infrastructure"),
-    "prototipo-vulneravel": ("Protótipo vulnerável", "Telemetria do relógio com vazamentos propositais"),
+    "prototipo-vulneravel": ("Protótipo vulnerável", "Eventos do Hoodi Pet com vazamentos propositais"),
     "prototipo-corrigido": ("Protótipo corrigido", "Mesmo fluxo com sanitizadores"),
     "mutacao": ("Teste de mutação", "Cópia do PanicoService com um debug esquecido"),
 }

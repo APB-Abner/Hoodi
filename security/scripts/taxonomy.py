@@ -56,7 +56,7 @@ NAME_PATTERNS: list[tuple[str, str]] = [
     ("SAUDE", r"(?i)^(bpm|batimentos?|heartrate|frequenciacardiaca|spo2|oxigenacao|pressaoarterial|glicemia|saude|health)$"),
     ("CPF", r"(?i)^(cpf|rg|cnh|documento)$"),
     ("CONTATO", r"(?i)^(email|telefone|phone|celular)$"),
-    ("DISPOSITIVO", r"(?i)^(deviceid|instalacaoid|installationid|imei|macaddress)$"),
+    ("DISPOSITIVO", r"(?i)^(deviceid|petid|instalacaoid|installationid|imei|macaddress)$"),
     ("NOME", r"(?i)^(nome|titularnome)$"),
 ]
 # Campos já protegidos (hash) contam no inventário, mas não como dado exposto.
