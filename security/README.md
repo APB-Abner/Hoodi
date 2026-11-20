@@ -50,7 +50,7 @@ no hoodi, ela revela onde a pessoa está no momento em que pede ajuda.
 Uma regra por categoria de dado, todas com os mesmos sinks e sanitizadores (âncoras YAML):
 
 - **Sources:** campos e variáveis cujo nome indica dado pessoal (`entrada.Senha`, `latitude`,
-  `refreshToken`, `HeartRate`…), inclusive dentro de lambdas (`rota.Select(p => p.Latitude)`).
+  `refreshToken`, `PetId`…), inclusive dentro de lambdas (`rota.Select(p => p.Latitude)`).
 - **Sinks (saídas inseguras):** `ILogger.Log*`, `Console/Debug/Trace.Write*`, `File.Write*/Append*`,
   `HttpClient.*Async` (exceto `https://exp.host/`, o Expo, único terceiro autorizado para push),
   `new *Exception(...)` e, para senha, a resposta HTTP (`Ok(...)`).
@@ -58,11 +58,15 @@ Uma regra por categoria de dado, todas com os mesmos sinks e sanitizadores (ânc
   `IDataProtector.Protect`, `MaskCpf`, `CoarseLocation`…) e comparações, que só devolvem
   verdadeiro ou falso.
 
+O protótipo vulnerável simula os **eventos do Hoodi Pet** (o bichinho de bolso que vibra e muda de
+carinha): o celular repassa ao servidor o botão de ajuda do Pet junto com a posição. O Pet não tem
+GPS nem sensor de saúde; as regras de saúde continuam ativas como prevenção (LGPD art. 11).
+
 Resultados (`evidence/taint-audit.md`):
 
 | Alvo | Risco Cidadão | Exposições | Bloqueantes |
 |---|---|---|---|
-| Protótipo vulnerável (`fixtures/LeakyPrototype`) | 100 Crítico | 18 | 11 |
+| Protótipo vulnerável (`fixtures/LeakyPrototype`) | 100 Crítico | 18 | 10 |
 | Protótipo corrigido (`fixtures/SafePrototype`) | 0 Baixo | 0 | 0 |
 | API hoodi (código real) | 19 Baixo | 11 latentes | 0 |
 | Teste de mutação (cópia do `PanicoService` + 1 debug com localização) | 28 Moderado | 1 | 1 |

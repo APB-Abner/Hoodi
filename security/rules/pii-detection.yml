@@ -18,7 +18,7 @@ rules:
       kind: inventory
     # Padrões estruturais de propriedade ({ get; set; }) não são aceitos pelo
     # parser de padrões C# do Semgrep, então a declaração é localizada por regex.
-    pattern-regex: (?i)\bpublic\s+[\w<>?,\[\]]+\s+(Senha|SenhaHash|Password|Token|TokenHash|RefreshToken|ExpoToken|ExpoTokenHash|Cpf|Rg|Email|Telefone|Nome|Latitude|Longitude|H3Cell|CelulaH3|HeartRate|Batimento|Bpm|Spo2|DeviceId|InstalacaoId)\s*\{\s*get
+    pattern-regex: (?i)\bpublic\s+[\w<>?,\[\]]+\s+(Senha|SenhaHash|Password|Token|TokenHash|RefreshToken|ExpoToken|ExpoTokenHash|Cpf|Rg|Email|Telefone|Nome|Latitude|Longitude|H3Cell|CelulaH3|HeartRate|Batimento|Bpm|Spo2|DeviceId|PetId|InstalacaoId)\s*\{\s*get
 
   # 2) INVENTÁRIO — parâmetros posicionais de records (DTOs de entrada/saída).
   #    O parser C# do Semgrep não casa padrões estruturais de record, então usamos regex.
@@ -28,7 +28,7 @@ rules:
     message: "Parâmetro de record com dado pessoal"
     metadata:
       kind: inventory
-    pattern-regex: (?i)\brecord\s+\w+\s*\((?:[^()]|\([^()]*\))*?\b(?:string|double|int|long|Guid)\??\s+(Senha|NovaSenha|Password|Token|RefreshToken|AccessToken|Cpf|Email|Nome|TitularNome|Latitude|Longitude|H3Cell|HeartRate|Batimento|DeviceId|InstalacaoId)\b
+    pattern-regex: (?i)\brecord\s+\w+\s*\((?:[^()]|\([^()]*\))*?\b(?:string|double|int|long|Guid)\??\s+(Senha|NovaSenha|Password|Token|RefreshToken|AccessToken|Cpf|Email|Nome|TitularNome|Latitude|Longitude|H3Cell|HeartRate|Batimento|DeviceId|PetId|InstalacaoId)\b
 
   # 3) record com dado SENSÍVEL e sem ToString() próprio.
   #    O C# gera ToString() automático listando TODAS as propriedades, então

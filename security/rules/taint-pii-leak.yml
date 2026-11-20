@@ -241,7 +241,7 @@ rules:
     severity: WARNING
     message: >-
       Identificador do dispositivo ($NAME) chega a uma saída insegura. Ele
-      permite rastrear o mesmo relógio/celular ao longo do tempo.
+      permite rastrear o mesmo Hoodi Pet/celular ao longo do tempo.
     metadata:
       pii_category: DISPOSITIVO
       lgpd: "Art. 5º, I (identificador)"
@@ -251,6 +251,6 @@ rules:
           - *source_by_name
           - metavariable-regex:
               metavariable: $NAME
-              regex: (?i)^(deviceid|instalacaoid|installationid|imei|macaddress)$
+              regex: (?i)^(deviceid|petid|instalacaoid|installationid|imei|macaddress)$
     pattern-sanitizers: *sanitizers
     pattern-sinks: *insecure_sinks

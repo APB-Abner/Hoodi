@@ -38,7 +38,7 @@ export interface PetEncontrado {
 export interface OuvintesPet {
   conexao?(estado: EstadoConexao): void;
   status?(status: StatusPet): void;
-  /** Clique ou pressao longa no botao do Pet. O app decide o que fazer (ex.: pedido de ajuda). */
+  /** Clique no botao 1 (tela) ou pressao longa de 3 s no botao 3 (pedido de ajuda: o app chama POST /v1/panico). */
   evento?(evento: EventoPet): void;
   erro?(mensagem: string, causa?: unknown): void;
 }

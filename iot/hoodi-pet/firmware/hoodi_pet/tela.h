@@ -11,6 +11,7 @@ void expressao(hoodi::Expressao e, uint8_t nivel, bool bleConectado);
 void pin(uint32_t pin);                  // codigo de 6 digitos para digitar no celular
 void pareamento(const char* nomeDispositivo);
 void mensagem(const char* linha1, const char* linha2);
+void animar(unsigned long agora);       // piscada das carinhas tranquila/atenta (chamar no loop)
 void ligar();
 void apagar();
 bool ligada();
